@@ -499,15 +499,29 @@ const firebaseConfig = {
   appId: "1:113969564475:web:fda9fdfa7c4f4b0cc8851e"
 };
 
-// 강제 연결 시작
-firebase.initializeApp(firebaseConfig);
-let fdb = firebase.database();
-let useFirebase = true;
+const CLOUD_PATH = 'planner_data/my_planner';
+
+/* 초기화 실패(SDK 차단·사내 방화벽 등)해도 앱 전체가 멈추지 않게 감쌈 */
+let fdb = null, useFirebase = false, fbInitError = null;
+try{
+  if(typeof firebase === "undefined") throw new Error("Firebase SDK 로드 실패");
+  firebase.initializeApp(firebaseConfig);
+  fdb = firebase.database();
+  useFirebase = true;
+}catch(e){
+  fbInitError = e;
+  console.error("[sync] Firebase 초기화 실패 - 오프라인 모드로 동작합니다.", e);
+}
+
+/* 기기 식별자: 내가 올린 변경이 되돌아왔을 때(에코) 무시하기 위함 */
 
 /* ══ 저장소 (로컬 저장, 실패 시 메모리) ══ */
 const store=(()=>{try{localStorage.setItem("__t","1");localStorage.removeItem("__t");return localStorage;}
   catch(e){const m={};return{getItem:k=>k in m?m[k]:null,setItem:(k,v)=>{m[k]=v},removeItem:k=>{delete m[k]}};}})();
 const KEY="daily-plan-v1";
+const CLIENT_ID=(()=>{try{let c=store.getItem("daily-plan-client");
+  if(!c){c=Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
+  store.setItem("daily-plan-client",c);}return c;}catch(e){return "tmp"+Math.random().toString(36).slice(2,8);}})();
 
 /* ══ 기본 리츄얼 ══ */
 function defaultRituals(){return[
@@ -545,47 +559,140 @@ function normalizeRituals(gs){
   return gs;
 }
 
+/* ══ 정규화 ══════════════════════════════════════════════════════
+   Firebase 실시간 DB는 "빈 객체 / 빈 배열 / null"을 저장하지 않고 지웁니다.
+   그래서 slots·rit·fields 같은 값이 통째로 사라진 채 돌아오고,
+   d.slots[t] 접근에서 TypeError가 나면서 화면이 멈춰 있었습니다.
+   또 배열이 객체({"0":..,"1":..})로 바뀌어 오는 경우도 있어 함께 복구합니다. */
+function toArr(v){
+  if(Array.isArray(v))return v.filter(x=>x!=null);
+  if(v&&typeof v==="object")return Object.keys(v).sort((a,b)=>a-b).map(k=>v[k]).filter(x=>x!=null);
+  return [];
+}
+function normSub(s){s=s||{};return{t:typeof s.t==="string"?s.t:"",done:!!s.done};}
+function normBig(b){b=b||{};
+  const subs=toArr(b.subs).map(normSub);
+  while(subs.length<2)subs.push({t:"",done:false});
+  const o={t:typeof b.t==="string"?b.t:"",done:!!b.done,carry:!!b.carry,subs};
+  if(typeof b.ct==="string")o.ct=b.ct;      // 이월 원본 문구 보존
+  if(typeof b.cd==="string")o.cd=b.cd;      // 내가 지운 이월 항목 기억
+  return o;}
+function normBigList(v){const a=toArr(v).map(normBig);
+  while(a.length<3)a.push(normBig());return a;}
+function normDay(d,k){d=(d&&typeof d==="object")?d:{};
+  d.date=d.date||k;
+  d.big=normBigList(d.big);
+  const subs=toArr(d.subs).map(s=>{
+    const o={t:(s&&typeof s.t==="string")?s.t:"",done:!!(s&&s.done),carry:!!(s&&s.carry)};
+    if(s&&typeof s.ct==="string")o.ct=s.ct;
+    if(s&&typeof s.cd==="string")o.cd=s.cd;
+    return o;});
+  while(subs.length<6)subs.push({t:"",done:false,carry:false});
+  d.subs=subs;
+  d.memo=typeof d.memo==="string"?d.memo:"";
+  d.slots=(d.slots&&typeof d.slots==="object")?d.slots:{};
+  d.rit  =(d.rit  &&typeof d.rit  ==="object")?d.rit  :{};
+  d.fields=(d.fields&&typeof d.fields==="object")?d.fields:{};
+  d.u=Number(d.u)||0;
+  return d;}
+function normRituals(v){
+  const gs=toArr(v).map(g=>({id:g&&g.id,name:(g&&g.name)||"",
+    rows:toArr(g&&g.rows).map(r=>toArr(r).map(x=>String(x==null?"":x))).filter(r=>r.length)}))
+    .filter(g=>g.id&&g.rows.length);
+  return gs.length?normalizeRituals(gs):defaultRituals();}
+function normalizeDB(raw){
+  const d=(raw&&typeof raw==="object")?raw:{};
+  d.v=1;
+  d.days=(d.days&&typeof d.days==="object")?d.days:{};
+  Object.keys(d.days).forEach(k=>{d.days[k]=normDay(d.days[k],k);});
+  d.weeks=(d.weeks&&typeof d.weeks==="object")?d.weeks:{};
+  Object.keys(d.weeks).forEach(k=>{const w=d.weeks[k]||{};d.weeks[k]={big:normBigList(w.big),u:Number(w.u)||0};});
+  d.rituals=normRituals(d.rituals);
+  d.settings=(d.settings&&typeof d.settings==="object")?d.settings:{};
+  d.font=d.font||"sys";
+  return d;
+}
+
+/* ══ 병합: 원격을 그대로 덮어쓰지 않고, 더 최근 것만 채택 ══
+   (사무실/집에서 동시에 열어두어도 한쪽 기록이 사라지지 않도록) */
+let mergeKeptLocal=false;
+function mergeDB(local,remote){
+  const out=normalizeDB(remote);
+  const L=normalizeDB(local);
+  mergeKeptLocal=false;
+  Object.keys(L.days).forEach(k=>{
+    const l=L.days[k],r=out.days[k];
+    if(!r||(l.u||0)>(r.u||0)){out.days[k]=l;mergeKeptLocal=true;}
+  });
+  Object.keys(L.weeks).forEach(k=>{
+    const l=L.weeks[k],r=out.weeks[k];
+    if(!r||(l.u||0)>(r.u||0)){out.weeks[k]=l;mergeKeptLocal=true;}
+  });
+  if(!remote||!remote.rituals)out.rituals=L.rituals;
+  out.font=L.font||out.font;
+  return out;
+}
+
 /* ══ DB ══ */
 let db=loadLocal();
 
 function loadLocal(){
   try{
     const r=store.getItem(KEY);
-    if(r){
-      const d=JSON.parse(r);d.days=d.days||{};d.weeks=d.weeks||{};
-      d.rituals=normalizeRituals(d.rituals||defaultRituals());
-      d.settings=d.settings||{};return d;
-    }
-  }catch(e){}
-  return{v:1,days:{},weeks:{},rituals:defaultRituals(),settings:{}};
+    if(r)return normalizeDB(JSON.parse(r));
+  }catch(e){console.error("[load] 로컬 데이터 파싱 실패",e);}
+  return normalizeDB({});
 }
 
 let saveTimer=null;
-let isRemoteUpdating = false;
+let applyingRemote=false;   // 원격 반영 중(동기 구간)에는 되쏘지 않음
+let pendingPush=false;      // 오프라인일 때 밀어둔 변경
+let cloudOnline=false;
 
-function save(now){
-  if(isRemoteUpdating) return;
-  clearTimeout(saveTimer);
-  const go=()=>{
-    try{
-      store.setItem(KEY,JSON.stringify(db));
-      if(useFirebase) {
-        flag("동기화 중...");
-        fdb.ref('planner_data/my_planner').set(db)
-           .then(() => flag("구름아이콘 동기화됨"))
-           .catch((error) => {
-             console.error(error);
-             flag("동기화 실패 (권한 오류)");
-           });
-      } else {
-        flag("내 PC에 저장됨");
-      }
-    }catch(e){flag("저장실패");}
-  };
-  if(now)go();else{flag("입력중…");saveTimer=setTimeout(go,500);}
+function stamp(){
+  const t=Date.now();
+  if(db.days[cur])db.days[cur].u=t;
+  const wk=mondayOf(cur);
+  if(db.weeks[wk])db.weeks[wk].u=t;
 }
 
-function flag(t){document.getElementById("saveflag").textContent=t;}
+function saveLocal(){
+  try{store.setItem(KEY,JSON.stringify(db));return true;}
+  catch(e){console.error("[save] 로컬 저장 실패",e);return false;}
+}
+
+function pushCloud(){
+  if(!useFirebase||!fdb)return;
+  if(!cloudOnline){pendingPush=true;flag("오프라인 · 기기에 저장됨");return;}
+  pendingPush=false;
+  db._by=CLIENT_ID; db._ts=Date.now();
+  flag("동기화 중…");
+  fdb.ref(CLOUD_PATH).set(JSON.parse(JSON.stringify(db)))
+    .then(()=>flag("☁ 동기화됨 "+new Date().toTimeString().slice(0,5)))
+    .catch(err=>{
+      pendingPush=true;
+      console.error("[sync] 쓰기 실패",err);
+      flag(err&&err.code==="PERMISSION_DENIED"?"⚠ 규칙 거부(쓰기)":"⚠ 동기화 실패");
+    });
+}
+
+function save(now){
+  /* 원격 반영 중에는 되쏘기만 막고, 그 외에는 절대 저장을 건너뛰지 않습니다.
+     (기존 코드는 isRemoteUpdating 300ms 동안 입력을 통째로 버렸습니다) */
+  if(applyingRemote)return;
+  clearTimeout(saveTimer);
+  const go=()=>{
+    stamp();
+    const okLocal=saveLocal();
+    if(!useFirebase){flag(okLocal?"이 기기에 저장됨":"⚠ 저장 실패");return;}
+    if(!okLocal)flag("⚠ 로컬 저장 실패");
+    pushCloud();
+  };
+  if(now)go();
+  else{flag("입력 중…");saveTimer=setTimeout(go,800);}
+}
+
+function flag(t){const el=document.getElementById("saveflag");if(el)el.textContent=t;}
 
 /* ══ 날짜 ══ */
 const DOW=["일","월","화","수","목","금","토"];
@@ -605,21 +712,101 @@ function ensureWeek(wk){
 function lastDayBefore(d){
   const ks=Object.keys(db.days).filter(k=>k<d).sort();return ks.length?ks[ks.length-1]:null;
 }
+/* ══ 이월 처리 ═══════════════════════════════════════════════════
+   기존에는 그 날짜를 "처음 여는 순간" 한 번만 계산하고 굳어버렸습니다.
+   그래서 미리 다음날을 열어본 뒤 오늘 업무를 완료해도, 다음날 칸에는
+   완료된 항목이 그대로 남아 있었습니다.
+   이제 날짜를 열 때마다 다시 검사하되,
+   ─ 자동 이월된 뒤 손대지 않은 칸(ct === 현재 내용)만 정리하고
+   ─ 직접 고쳤거나 체크한 칸은 절대 건드리지 않습니다. */
+
+function pendingBigOf(p){        // 이전 날의 '미완료' 중요업무 (index 유지)
+  return p.big.map(b=>(b&&b.t.trim()&&!b.done)?b:null);
+}
+function pendingSubsOf(p){       // 이전 날의 '미완료' 잔업무 문구 목록
+  return p.subs.filter(s=>s.t.trim()&&!s.done).map(s=>s.t.trim());
+}
+
+/* 이월 항목을 현재 상태에 맞게 갱신. 바뀐 게 있으면 true */
+function refreshCarry(dk){
+  const day=db.days[dk]; if(!day)return false;
+  const prev=lastDayBefore(dk); if(!prev)return false;
+  const p=db.days[prev]; if(!p)return false;
+  let changed=false;
+
+  // ① 중요 업무(Daily Big) ─ 같은 자리끼리 비교
+  const pbig=pendingBigOf(p);
+  day.big.forEach((b,bi)=>{
+    if(!b||!b.carry||b.done)return;              // 내가 체크하거나 고친 건 그대로 둠
+    const src=pbig[bi];
+    if(!src){                                    // 원본이 완료되었거나 지워짐 → 비움
+      day.big[bi]=emptyBig();changed=true;
+    }else if(src.t!==b.t){                       // 원본 문구가 바뀜 → 따라감
+      b.t=src.t;b.ct=src.t;changed=true;
+    }
+  });
+
+  // ② 잔업무(Sub things) ─ 문구로 비교
+  const psubs=pendingSubsOf(p);
+  day.subs.forEach(sv=>{
+    if(!sv||!sv.carry||sv.done)return;
+    const ct=(sv.ct!=null?sv.ct:sv.t);
+    if(psubs.indexOf(ct.trim())===-1){           // 원본이 완료됨 → 비움
+      sv.t="";sv.carry=false;delete sv.ct;changed=true;
+    }
+  });
+
+  // ③ 이전 날에서 새로 밀려난 항목이 있으면 빈 칸에 채워 넣음
+  const have=day.subs.filter(sv=>sv.t.trim()).map(sv=>sv.t.trim());
+  const dropped=day.subs.filter(sv=>sv.cd).map(sv=>sv.cd);   // 내가 지운 이월 항목
+  psubs.forEach(t=>{
+    if(have.indexOf(t)!==-1||dropped.indexOf(t)!==-1)return;
+    const slot=day.subs.find(sv=>!sv.t.trim()&&!sv.cd);
+    if(slot){slot.t=t;slot.ct=t;slot.carry=true;have.push(t);changed=true;}
+  });
+  pbig.forEach((src,bi)=>{
+    if(!src)return;
+    const cell=day.big[bi];
+    if(cell&&cell.t.trim())return;               // 이미 뭔가 적혀 있으면 손대지 않음
+    if(cell&&cell.cd===src.t)return;             // 내가 지운 항목은 되살리지 않음
+    day.big[bi]={t:src.t,ct:src.t,done:false,carry:true,
+      subs:src.subs.map(x=>({t:x.done?"":x.t,done:false}))};
+    changed=true;
+  });
+
+  return changed;
+}
+
+/* 앞선 날짜들이 굳어 있을 수 있으므로 최근 며칠을 순서대로 다시 계산 */
+function refreshCarryChain(dk){
+  const ks=Object.keys(db.days).filter(k=>k<=dk).sort().slice(-30);
+  let changed=false;
+  ks.forEach(k=>{if(refreshCarry(k))changed=true;});
+  return changed;
+}
+
 function ensureDay(d){
-  if(db.days[d])return db.days[d];
+  if(db.days[d]){
+    if(!applyingRemote&&refreshCarryChain(d))saveLocal();
+    return db.days[d];
+  }
   const day={date:d,big:[emptyBig(),emptyBig(),emptyBig()],subs:[],memo:"",slots:{},rit:{},fields:{}};
   for(let i=0;i<6;i++)day.subs.push({t:"",done:false,carry:false});
   const prev=lastDayBefore(d);
   if(prev){
-    const p=db.days[prev];const pend=[];
-    p.subs.forEach(s=>{if(s.t.trim()&&!s.done)pend.push(s.t.trim());});
-    let i=0;day.subs.forEach(s=>{if(i<pend.length){s.t=pend[i++];s.carry=true;}});
+    const p=db.days[prev];
+    let i=0;const pend=pendingSubsOf(p);
+    day.subs.forEach(sv=>{if(i<pend.length){sv.t=pend[i];sv.ct=pend[i];sv.carry=true;i++;}});
     if(i<pend.length)day.memo=pend.slice(i).map(t=>"· "+t+" (이월)").join("\n");
     p.big.forEach((b,bi)=>{if(b.t.trim()&&!b.done){
-      day.big[bi]={t:b.t,done:false,carry:true,
-        subs:b.subs.map(s=>({t:s.done?"":s.t,done:false}))};}});
+      day.big[bi]={t:b.t,ct:b.t,done:false,carry:true,
+        subs:b.subs.map(x=>({t:x.done?"":x.t,done:false}))};}});
   }
-  db.days[d]=day;save();return day;
+  db.days[d]=day;
+  /* 날짜만 넘겨봐도 전체 DB를 클라우드에 밀어올리던 부분.
+     로컬에만 남기고, 실제 입력이 생길 때 동기화되도록 함 */
+  if(!applyingRemote)saveLocal();
+  return day;
 }
 
 /* ══ 시간 슬롯 ══ */
@@ -658,7 +845,9 @@ function renderBig(box,arr,kind){
       </div>
       <div class="subs"></div>`;
     const ti=row.querySelector(".ti");ti.value=b.t;
-    ti.addEventListener("input",()=>{b.t=ti.value;save();});
+    ti.addEventListener("input",()=>{
+      if(b.carry){b.carry=false;b.cd=(b.ct!=null?b.ct:b.t);delete b.ct;}
+      b.t=ti.value;save();});
     const cb=row.querySelector(".chk");cb.checked=b.done;
     cb.addEventListener("change",()=>{b.done=cb.checked;ti.classList.toggle("done",cb.checked);save();});
     const sw=row.querySelector(".subs");
@@ -684,7 +873,9 @@ function renderSubs(d){
     const cb=el.querySelector(".chk"),ip=el.querySelector("input[type=text]");
     cb.checked=s.done;ip.value=s.t;ip.classList.toggle("done",s.done);
     if(s.carry){const b=document.createElement("span");b.className="carry";b.textContent="이월";el.appendChild(b);}
-    ip.addEventListener("input",()=>{s.t=ip.value;save();});
+    ip.addEventListener("input",()=>{
+      if(s.carry){s.carry=false;s.cd=(s.ct!=null?s.ct:s.t);delete s.ct;}
+      s.t=ip.value;save();});
     cb.addEventListener("change",()=>{s.done=cb.checked;ip.classList.toggle("done",cb.checked);save();});
     box.appendChild(el);
   });
@@ -1161,42 +1352,93 @@ function download(name,text,type){const b=new Blob([text],{type:type+";charset=u
 function esc(s){return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
 let tt;function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");
   clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),1900);}
-window.addEventListener("beforeunload",()=>save(true));
+/* ══ 종료·백그라운드 전환 시 저장 ══
+   모바일 브라우저는 beforeunload를 안 쏘는 경우가 많아 visibilitychange를 함께 사용 */
+function flushSave(){clearTimeout(saveTimer);stamp();saveLocal();
+  if(useFirebase&&cloudOnline)pushCloud();}
+window.addEventListener("beforeunload",flushSave);
+window.addEventListener("pagehide",flushSave);
+document.addEventListener("visibilitychange",()=>{if(document.hidden)flushSave();});
 
-// =======================================================================
-// ★ 빈 데이터 덮어쓰기 차단 로직 적용 완료 ★
-// =======================================================================
+/* =======================================================================
+   클라우드 동기화
+======================================================================= */
 
-// 1. 화면부터 무조건 먼저 띄워줍니다 (하얀 화면 방지)
+// 1) 화면부터 띄웁니다 (흰 화면 방지)
 render();
 
-if (useFirebase) {
-  flag("클라우드 연결 중...");
-  fdb.ref('planner_data/my_planner').on('value', (snapshot) => {
-    const remoteData = snapshot.val();
-    
-    // 2. 클라우드에 '의미 있는 기록(days)'이 하나라도 있을 때만 덮어씌움
-    if (remoteData && remoteData.days && Object.keys(remoteData.days).length > 0) {
-      isRemoteUpdating = true;
-      db = remoteData;
-      store.setItem(KEY, JSON.stringify(db)); // 로컬 백업 갱신
-      render(); // 화면 다시 그리기
-      flag("동기화 완료");
-      setTimeout(() => { isRemoteUpdating = false; }, 300);
-    } 
-    // 3. 클라우드가 텅 비어있다면? 내 PC에 있는 기록을 클라우드로 밀어넣음! (데이터 보호)
-    else {
-      if (db.days && Object.keys(db.days).length > 0) {
-        fdb.ref('planner_data/my_planner').set(db)
-           .then(() => flag("동기화 완료"))
-           .catch(() => flag("권한 오류"));
-      } else {
-        flag("동기화 준비 완료");
-      }
+function isTyping(){
+  const a=document.activeElement;
+  return !!a&&(a.tagName==="INPUT"||a.tagName==="TEXTAREA");
+}
+let pendingRemote=null;
+
+function applyRemote(remote){
+  applyingRemote=true;
+  try{
+    db=mergeDB(db,remote);
+    applyFont(db.font);
+    saveLocal();
+    render();
+    /* 이 기기에만 있던(또는 더 최신인) 기록은 다시 클라우드로 올려 양쪽을 맞춤 */
+    if(mergeKeptLocal)setTimeout(()=>pushCloud(),0);
+  }catch(e){
+    console.error("[sync] 원격 데이터 반영 실패",e);
+    flag("⚠ 데이터 형식 오류");
+  }finally{
+    applyingRemote=false;   // 동기 구간이므로 setTimeout 없이 즉시 해제
+  }
+}
+
+/* 입력 중에는 화면을 갈아엎지 않고, 포커스가 빠질 때 반영 */
+document.addEventListener("focusout",()=>{
+  setTimeout(()=>{
+    if(pendingRemote&&!isTyping()){const r=pendingRemote;pendingRemote=null;applyRemote(r);flag("☁ 최신으로 갱신됨");}
+  },120);
+});
+
+if(useFirebase&&fdb){
+  flag("클라우드 연결 중…");
+
+  // 실제 연결 상태 추적
+  fdb.ref(".info/connected").on("value",snap=>{
+    cloudOnline=!!snap.val();
+    if(cloudOnline){
+      if(pendingPush)pushCloud();
+      else flag("☁ 연결됨");
+    }else{
+      flag("오프라인 · 기기에 저장됨");
     }
   });
-} else {
+
+  fdb.ref(CLOUD_PATH).on("value",snapshot=>{
+    const remote=snapshot.val();
+
+    // (a) 내가 방금 올린 변경이 되돌아온 것 → 무시 (에코 루프·포커스 튕김 방지)
+    if(remote&&remote._by===CLIENT_ID)return;
+
+    // (b) 클라우드가 비어 있음 → 내 기록을 올려서 초기화
+    if(!remote||!remote.days||Object.keys(remote.days).length===0){
+      if(db.days&&Object.keys(db.days).length>0)pushCloud();
+      else flag("☁ 연결됨 (기록 없음)");
+      return;
+    }
+
+    // (c) 다른 기기의 변경 → 입력 중이면 미뤘다가 반영
+    if(isTyping()){pendingRemote=remote;flag("☁ 새 변경 대기 중");return;}
+    applyRemote(remote);
+    flag("☁ 동기화됨 "+new Date().toTimeString().slice(0,5));
+  },err=>{
+    // ★ 원래 코드에는 이 에러 콜백이 없어서, 규칙에 막혀도
+    //   "클라우드 연결 중…"에서 영원히 멈춘 채 아무 안내가 없었습니다.
+    console.error("[sync] 읽기 실패",err);
+    useFirebase=false;
+    flag(err&&err.code==="PERMISSION_DENIED"?"⚠ 규칙 거부 · 로컬 저장":"⚠ 클라우드 오류 · 로컬 저장");
+    toast("클라우드에 접근할 수 없습니다. Firebase 보안 규칙을 확인하세요. (기록은 이 기기에 저장됩니다)");
+  });
+}else{
   flag("오프라인 모드");
+  if(fbInitError)toast("클라우드 연결 실패 - 이 기기에만 저장됩니다");
 }
 </script>
 </body>
