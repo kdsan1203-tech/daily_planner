@@ -340,7 +340,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 <div class="topbar">
   <div class="rule"></div>
   <div class="inner">
-    <span class="brand">일일계획표</span>
+    <span class="brand" id="brandTag" title="이 기기에 로드된 버전">일일계획표</span>
     <div class="datenav">
       <button class="nav-btn" id="prev" title="이전 날 (Alt+←)">◀</button>
       <button class="today-btn" id="todayBtn">오늘</button>
@@ -633,6 +633,7 @@ function mergeDB(local,remote){
   return out;
 }
 
+const APP_VER="v3";
 /* ══ DB ══ */
 let db=loadLocal();
 
@@ -648,6 +649,7 @@ let saveTimer=null;
 let applyingRemote=false;   // 원격 반영 중(동기 구간)에는 되쏘지 않음
 let pendingPush=false;      // 오프라인일 때 밀어둔 변경
 let cloudOnline=false;
+let cloudSynced=false;      // 클라우드 내용을 최소 1회 받아왔는지
 
 function stamp(){
   const t=Date.now();
@@ -663,6 +665,9 @@ function saveLocal(){
 
 function pushCloud(){
   if(!useFirebase||!fdb)return;
+  /* 클라우드 내용을 아직 한 번도 못 받아온 상태에서 밀어올리면
+     이 기기의 오래된(혹은 빈) 데이터가 클라우드를 덮어씁니다. 반드시 대기. */
+  if(!cloudSynced){pendingPush=true;flag("클라우드 확인 중…");return;}
   if(!cloudOnline){pendingPush=true;flag("오프라인 · 기기에 저장됨");return;}
   pendingPush=false;
   db._by=CLIENT_ID; db._ts=Date.now();
@@ -1295,17 +1300,29 @@ $("ritReset").onclick=()=>{if(confirm("리츄얼 목록을 기본값으로 되�
 $("btnExport").onclick=()=>download(`일일계획표_백업_${key(new Date())}.json`,JSON.stringify(db),"application/json");
 $("btnImport").onclick=()=>$("fileIn").click();
 $("fileIn").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
-  r.onload=()=>{try{const n=JSON.parse(r.result);
-    if(!n.days)throw 0;
-    if(!confirm("백업 파일을 불러오면 현재 기기의 기록과 합쳐집니다. 계속할까요?"))return;
-    db.days=Object.assign({},db.days,n.days);db.weeks=Object.assign({},db.weeks,n.weeks);
-    if(n.rituals)db.rituals=n.rituals;
-    
-    // 불러오기 후 강제 저장 시도
-    save(true);
+  r.onload=()=>{try{
+    const n=normalizeDB(JSON.parse(r.result));
+    if(!n.days||!Object.keys(n.days).length)throw 0;
+    const cnt=Object.keys(n.days).length;
+    if(!confirm("백업 파일의 기록 "+cnt+"일치를 불러옵니다.\n\n"
+      +"겹치는 날짜는 백업 파일 내용이 우선 적용되며, 클라우드에도 그대로 반영됩니다.\n"
+      +"백업에 없는 날짜는 그대로 남습니다.\n\n계속할까요?"))return;
+
+    /* 불러온 기록에는 수정 시각이 없어 '아주 오래된 것'으로 취급됩니다.
+       그대로 두면 잠시 뒤 클라우드 데이터에 밀려 사라지므로,
+       지금 시각을 찍어 이번 복원이 확실히 우선되도록 합니다. */
+    const t=Date.now();
+    Object.keys(n.days).forEach(k=>{n.days[k].u=t;db.days[k]=n.days[k];});
+    Object.keys(n.weeks).forEach(k=>{n.weeks[k].u=t;db.weeks[k]=n.weeks[k];});
+    if(n.rituals&&n.rituals.length)db.rituals=n.rituals;
+    if(n.font)db.font=n.font;
+
+    applyFont(db.font);
+    saveLocal();
     render();
-    toast("불러왔습니다");
-  }catch(err){toast("백업 파일 형식이 아닙니다");}};
+    if(useFirebase){cloudSynced=true;pushCloud();}   // 복원본을 클라우드에 확정
+    toast(cnt+"일치를 불러왔습니다");
+  }catch(err){console.error(err);toast("백업 파일 형식이 아닙니다");}};
   r.readAsText(f);e.target.value="";};
 $("btnPrint").onclick=()=>window.print();
 
@@ -1364,6 +1381,10 @@ document.addEventListener("visibilitychange",()=>{if(document.hidden)flushSave()
    클라우드 동기화
 ======================================================================= */
 
+// 버전 표시 - 기기마다 같은 값이 보여야 정상
+(function(){const el=document.getElementById("brandTag");
+  if(el)el.textContent="일일계획표 "+APP_VER;})();
+
 // 1) 화면부터 띄웁니다 (흰 화면 방지)
 render();
 
@@ -1415,10 +1436,11 @@ if(useFirebase&&fdb){
     const remote=snapshot.val();
 
     // (a) 내가 방금 올린 변경이 되돌아온 것 → 무시 (에코 루프·포커스 튕김 방지)
-    if(remote&&remote._by===CLIENT_ID)return;
+    if(remote&&remote._by===CLIENT_ID){cloudSynced=true;return;}
 
     // (b) 클라우드가 비어 있음 → 내 기록을 올려서 초기화
     if(!remote||!remote.days||Object.keys(remote.days).length===0){
+      cloudSynced=true;
       if(db.days&&Object.keys(db.days).length>0)pushCloud();
       else flag("☁ 연결됨 (기록 없음)");
       return;
@@ -1427,6 +1449,8 @@ if(useFirebase&&fdb){
     // (c) 다른 기기의 변경 → 입력 중이면 미뤘다가 반영
     if(isTyping()){pendingRemote=remote;flag("☁ 새 변경 대기 중");return;}
     applyRemote(remote);
+    cloudSynced=true;
+    if(pendingPush)pushCloud();
     flag("☁ 동기화됨 "+new Date().toTimeString().slice(0,5));
   },err=>{
     // ★ 원래 코드에는 이 에러 콜백이 없어서, 규칙에 막혀도
