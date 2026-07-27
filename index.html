@@ -7,6 +7,7 @@
 <!-- Firebase v8 Compat SDK 추가 -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <style>
 :root{
   --paper:#F6F5F2; --card:#fff; --ink:#1E1C19; --ink2:#4A4641; --ink3:#8B857D;
@@ -25,6 +26,25 @@ body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:
 button{font-family:inherit;font-size:inherit;color:inherit;cursor:pointer}
 input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--week);outline-offset:1px}
+
+/* ── 로그인 화면 ─────────────────────────────── */
+.authwall{position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+  display:flex;align-items:center;justify-content:center;z-index:9999;font-family:var(--sans)}
+.authbox{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:48px 40px;
+  width:100%;max-width:360px}
+.authbox h1{margin:0 0 8px;font-size:28px;font-weight:700;color:var(--ink);text-align:center}
+.authbox p{margin:0 0 32px;font-size:14px;color:var(--ink3);text-align:center}
+.authfield{margin-bottom:20px}
+.authfield label{display:block;font-size:12px;font-weight:600;color:var(--ink2);margin-bottom:6px;letter-spacing:.05em}
+.authfield input{width:100%;padding:10px 12px;border:1px solid var(--rule);border-radius:8px;font-size:14px;
+  font-family:inherit;box-sizing:border-box}
+.authfield input:focus{outline:none;border-color:var(--week);box-shadow:0 0 0 3px rgba(31,78,156,.1)}
+.authbtn{width:100%;padding:12px;background:var(--week);color:#fff;border:none;border-radius:8px;
+  font-weight:600;font-size:14px;cursor:pointer;margin-top:8px;transition:background .2s}
+.authbtn:hover{background:#1a3a7a}
+.authbtn:active{background:#0f2654}
+.autherror{font-size:12px;color:#c0261e;margin-top:12px;text-align:center}
+
 
 /* ── 상단 바 ─────────────────────────── */
 .topbar{position:sticky;top:0;z-index:30;background:var(--card);border-bottom:1px solid var(--rule);
@@ -337,6 +357,27 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 </head>
 <body data-tab="plan">
 
+<div id="authWall" class="authwall">
+  <div class="authbox">
+    <h1>일일계획표</h1>
+    <p>업무 계획 관리 시스템</p>
+    <form id="authForm">
+      <div class="authfield">
+        <label>이메일</label>
+        <input type="email" id="authEmail" placeholder="이메일 주소" required>
+      </div>
+      <div class="authfield">
+        <label>비밀번호</label>
+        <input type="password" id="authPassword" placeholder="비밀번호" required>
+      </div>
+      <button type="submit" class="authbtn">로그인</button>
+      <div id="authError" class="autherror"></div>
+    </form>
+  </div>
+</div>
+
+<div id="mainContent" style="display:none">
+
 <div class="topbar">
   <div class="rule"></div>
   <div class="inner">
@@ -356,6 +397,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
       <div class="moreWrap">
         <button class="tool" id="btnMore" title="더보기">⋯</button>
         <div class="more" id="moreMenu">
+          <button class="tool" id="btnLogout" title="로그아웃" style="color:#c0261e">로그아웃</button>
           <select class="tool" id="fontSel" title="글씨체">
             <option value="sys">기본 (맑은 고딕)</option>
             <option value="hcr">함초롬돋움 (한글 서체)</option>
@@ -482,6 +524,8 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 
 <input type="file" id="fileIn" accept="application/json" hidden>
 <div class="toast" id="toast"></div>
+
+</div><!-- mainContent -->
 
 <script>
 "use strict";
@@ -650,6 +694,7 @@ let applyingRemote=false;   // 원격 반영 중(동기 구간)에는 되쏘지 
 let pendingPush=false;      // 오프라인일 때 밀어둔 변경
 let cloudOnline=false;
 let cloudSynced=false;      // 클라우드 내용을 최소 1회 받아왔는지
+let cloudListenerActive=false;  // 클라우드 리스너가 이미 활성화됐는지
 
 function stamp(){
   const t=Date.now();
@@ -1343,6 +1388,7 @@ applyFont(db.font);
 $("fontSel").onchange=e=>{db.font=e.target.value;applyFont(db.font);save(true);
   toast("글씨체를 바꿨습니다");};
 
+$("btnLogout").onclick=()=>{if(confirm("로그아웃하시겠습니까?")){logout();alert("로그아웃되었습니다");}};
 $("btnMore").onclick=e=>{e.stopPropagation();$("moreMenu").classList.toggle("open");};
 document.addEventListener("click",e=>{
   if(!e.target.closest(".moreWrap"))$("moreMenu").classList.remove("open");});
@@ -1418,17 +1464,111 @@ document.addEventListener("focusout",()=>{
   },120);
 });
 
-if(useFirebase&&fdb){
+
+/* ══════════════════════════════════════════════════════════════════
+   ★ Firebase Authentication
+====================================================================== */
+
+let auth = null, currentUser = null;
+
+// Firebase 초기화 (기존 SDK 다음에서 auth 생성)
+if (useFirebase && fdb) {
+  try {
+    auth = firebase.auth();
+    console.log("[auth] Firebase Auth 초기화 완료");
+  } catch (e) {
+    console.error("[auth] Firebase Auth 초기화 실패", e);
+    useFirebase = false;
+  }
+}
+
+/* 인증 상태 감시 — 사용자가 로그인/로그아웃하면 즉시 감지 */
+function initAuthListener() {
+  if (!auth) return;
+  auth.onAuthStateChanged((user) => {
+    currentUser = user;
+    const wall = document.getElementById("authWall");
+    const main = document.getElementById("mainContent");
+    if (!wall || !main) return;
+    
+    if (user) {
+      // ✓ 로그인 됨 → 메인 화면 표시 및 클라우드 동기화 시작
+      wall.style.display = "none";
+      main.style.display = "block";
+      console.log("[auth] 로그인:", user.email);
+      
+      // 클라우드 리스너 시작 (로그인 후에만)
+      if (useFirebase && fdb && !cloudListenerActive) {
+        startCloudSync();
+      }
+    } else {
+      // ✗ 로그인 안 됨 → 로그인 화면 표시
+      wall.style.display = "flex";
+      main.style.display = "none";
+      console.log("[auth] 로그아웃됨");
+    }
+  });
+}
+
+/* 로그인 폼 제출 */
+const authForm = document.getElementById("authForm");
+if (authForm) {
+  authForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!auth) {
+      alert("Firebase Auth를 사용할 수 없습니다");
+      return;
+    }
+
+    const email = document.getElementById("authEmail").value;
+    const password = document.getElementById("authPassword").value;
+    const errorDiv = document.getElementById("authError");
+
+    try {
+      errorDiv.textContent = "로그인 중...";
+      await auth.signInWithEmailAndPassword(email, password);
+      errorDiv.textContent = "";
+      authForm.reset();
+      console.log("[auth] 로그인 성공");
+    } catch (error) {
+      console.error("[auth] 로그인 실패:", error.code, error.message);
+      let msg = "로그인 실패";
+      if (error.code === "auth/user-not-found") msg = "존재하지 않는 이메일입니다";
+      else if (error.code === "auth/wrong-password") msg = "비밀번호가 틀렸습니다";
+      else if (error.code === "auth/invalid-email") msg = "유효하지 않은 이메일입니다";
+      else if (error.code === "auth/user-disabled") msg = "비활성화된 계정입니다";
+      else if (error.code === "auth/too-many-requests") msg = "너무 많은 시도. 나중에 다시 시도하세요";
+      errorDiv.textContent = msg;
+    }
+  });
+}
+
+/* 로그아웃 함수 */
+function logout() {
+  if (!auth) return;
+  auth.signOut().then(() => {
+    console.log("[auth] 로그아웃됨");
+    currentUser = null;
+  }).catch(err => {
+    console.error("[auth] 로그아웃 실패:", err);
+  });
+}
+
+function startCloudSync(){
+  if(cloudListenerActive)return;
+  cloudListenerActive=true;
   flag("클라우드 연결 중…");
 
   // 실제 연결 상태 추적
   fdb.ref(".info/connected").on("value",snap=>{
     cloudOnline=!!snap.val();
-    if(cloudOnline){
-      if(pendingPush)pushCloud();
-      else flag("☁ 연결됨");
-    }else{
-      flag("오프라인 · 기기에 저장됨");
+    if(currentUser){
+      if(cloudOnline){
+        if(pendingPush)pushCloud();
+        else flag("☁ 연결됨");
+      }else{
+        flag("오프라인 · 기기에 저장됨");
+      }
     }
   });
 
@@ -1460,10 +1600,15 @@ if(useFirebase&&fdb){
     flag(err&&err.code==="PERMISSION_DENIED"?"⚠ 규칙 거부 · 로컬 저장":"⚠ 클라우드 오류 · 로컬 저장");
     toast("클라우드에 접근할 수 없습니다. Firebase 보안 규칙을 확인하세요. (기록은 이 기기에 저장됩니다)");
   });
-}else{
+}
+
+if(!useFirebase){
   flag("오프라인 모드");
   if(fbInitError)toast("클라우드 연결 실패 - 이 기기에만 저장됩니다");
 }
+
+/* 인증 리스너 시작 (가장 마지막에) */
+initAuthListener();
 </script>
 </body>
 </html>
