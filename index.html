@@ -123,6 +123,37 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .subitem input[type=text]:hover{border-bottom-color:var(--rule)}
 .subitem input[type=text]:focus{border-bottom-color:var(--sub);outline:none}
 .carry{font-family:var(--mono);font-size:9px;letter-spacing:.06em;color:#8a6b1f;background:#FBF2D4;border:1px solid #EEDFA6;padding:0 4px;border-radius:3px;flex:none}
+/* ── BACKLOG (중장기 과제) ─────────────────── */
+.card.bl{border-top-color:#7a5ea8}
+.card.bl .eyebrow{color:#6b4f99}
+.blitem{display:flex;align-items:center;gap:7px;padding:5px 2px;border-bottom:1px dashed var(--rule2)}
+.blitem .chk{flex:none}
+.blitem .bt{flex:1 1 auto;min-width:0;border:0;background:none;padding:2px;
+  border-bottom:1px solid transparent;font-family:inherit;font-size:inherit;color:inherit}
+.blitem .bw{flex:0 0 96px;border:0;background:none;padding:2px;text-align:right;
+  border-bottom:1px solid transparent;font-family:inherit;font-size:12px;color:var(--ink3)}
+.blitem input:hover{border-bottom-color:var(--rule)}
+.blitem input:focus{border-bottom-color:#7a5ea8;outline:none}
+.blitem .bt.done,.blitem .bw.done{text-decoration:line-through;color:var(--ink3)}
+.blitem .bdel{flex:none;border:0;background:none;color:var(--ink3);cursor:pointer;
+  font-size:15px;line-height:1;padding:2px 4px;border-radius:4px;opacity:.35}
+.blitem:hover .bdel{opacity:1}
+.blitem .bdel:hover{background:#f7e6e4;color:#c0261e}
+.blitem.isdone .bt,.blitem.isdone .bw{opacity:.55}
+.bldone-bar{display:flex;align-items:center;gap:8px;padding:7px 2px 4px;margin-top:4px;
+  border-top:1px solid var(--rule2)}
+.bldone-bar .spacer{flex:1}
+.bltoggle{border:0;background:none;padding:0;font-family:inherit;font-size:12px;
+  color:var(--ink3);cursor:pointer;letter-spacing:.02em}
+.bltoggle:hover{color:#6b4f99}
+.blclear{border:0;background:none;padding:0;font-family:inherit;font-size:11px;
+  color:var(--ink3);cursor:pointer;opacity:.7}
+.blclear:hover{color:#c0261e;opacity:1;text-decoration:underline}
+.bldone-sep{border-top:1px solid var(--rule2);margin-top:4px;padding-top:2px}
+.bladd{margin-top:8px;border:1px dashed var(--rule);background:none;border-radius:6px;
+  padding:6px 12px;font-family:inherit;font-size:12px;color:var(--ink3);cursor:pointer}
+.bladd:hover{border-color:#7a5ea8;color:#6b4f99}
+.blempty{padding:10px 2px;font-size:12px;color:var(--ink3)}
 .memo{width:100%;min-height:74px;border:0;background:none;resize:vertical;padding:2px;line-height:1.6}
 .memo:focus{outline:none}
 
@@ -320,6 +351,11 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   body:not(.printing) .subitem{padding:1.5px 0!important}
   body:not(.printing) .subitem input[type=text]{font-size:7.5pt!important;padding:0 1px!important}
   body:not(.printing) .subgrid{gap:0 8px!important}
+  body:not(.printing) .bladd{display:none!important}
+  body:not(.printing) .blitem{padding:1.5px 0!important}
+  body:not(.printing) .blitem input{font-size:7.5pt!important;padding:0 1px!important}
+  body:not(.printing) .blitem .bdel{display:none!important}
+  body:not(.printing) .blclear{display:none!important}
   body:not(.printing) .carry{font-size:6pt!important;padding:0 2px!important}
   body:not(.printing) .memo{display:none!important}
   body:not(.printing) .memoprint{display:block!important;min-height:11mm!important}
@@ -452,6 +488,15 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
       <div class="body"><textarea class="memo" id="memo" placeholder="확인할 것, 통화 내용, 다음 액션…"></textarea><div class="memoprint" id="memoPrint"></div></div>
     </section>
 
+    <section class="card bl p-plan">
+      <header><span class="eyebrow">BACKLOG<small>당장은 아니지만 계속 염두에 둘 것</small></span>
+        <span class="spacer"></span><span class="hint" id="blSum"></span></header>
+      <div class="body">
+        <div id="blBox"></div>
+        <button class="bladd" id="blAdd">+ 항목 추가</button>
+      </div>
+    </section>
+
     <section class="card p-rit">
       <header><span class="eyebrow" style="color:var(--ink3)">RITUAL</span>
         <span class="spacer"></span><span class="hint" id="ritSum"></span></header>
@@ -564,6 +609,7 @@ try{
 const store=(()=>{try{localStorage.setItem("__t","1");localStorage.removeItem("__t");return localStorage;}
   catch(e){const m={};return{getItem:k=>k in m?m[k]:null,setItem:(k,v)=>{m[k]=v},removeItem:k=>{delete m[k]}};}})();
 const KEY="daily-plan-v1";
+const SUB_COUNT=8;              // SUB THINGS 칸 수
 const CLIENT_ID=(()=>{try{let c=store.getItem("daily-plan-client");
   if(!c){c=Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
   store.setItem("daily-plan-client",c);}return c;}catch(e){return "tmp"+Math.random().toString(36).slice(2,8);}})();
@@ -632,7 +678,7 @@ function normDay(d,k){d=(d&&typeof d==="object")?d:{};
     if(s&&typeof s.ct==="string")o.ct=s.ct;
     if(s&&typeof s.cd==="string")o.cd=s.cd;
     return o;});
-  while(subs.length<6)subs.push({t:"",done:false,carry:false});
+  while(subs.length<SUB_COUNT)subs.push({t:"",done:false,carry:false});
   d.subs=subs;
   d.memo=typeof d.memo==="string"?d.memo:"";
   d.slots=(d.slots&&typeof d.slots==="object")?d.slots:{};
@@ -654,9 +700,18 @@ function normRituals(v){
     rows:toArr(g&&g.rows).map(r=>toArr(r).map(x=>String(x==null?"":x))).filter(r=>r.length)}))
     .filter(g=>g.id&&g.rows.length);
   return gs.length?normalizeRituals(gs):defaultRituals();}
+function normBacklog(v){
+  return toArr(v).map(b=>({
+    t:(b&&typeof b.t==="string")?b.t:"",
+    w:(b&&typeof b.w==="string")?b.w:"",
+    done:!!(b&&b.done)
+  }));
+}
 function normalizeDB(raw){
   const d=(raw&&typeof raw==="object")?raw:{};
   d.v=1;
+  d.backlog=normBacklog(d.backlog);
+  d.bu=Number(d.bu)||0;          // backlog 수정 시각
   d.days=(d.days&&typeof d.days==="object")?d.days:{};
   Object.keys(d.days).forEach(k=>{d.days[k]=normDay(d.days[k],k);});
   d.weeks=(d.weeks&&typeof d.weeks==="object")?d.weeks:{};
@@ -683,11 +738,12 @@ function mergeDB(local,remote){
     if(!r||(l.u||0)>(r.u||0)){out.weeks[k]=l;mergeKeptLocal=true;}
   });
   if(!remote||!remote.rituals)out.rituals=L.rituals;
+  if((L.bu||0)>(out.bu||0)){out.backlog=L.backlog;out.bu=L.bu;mergeKeptLocal=true;}
   out.font=L.font||out.font;
   return out;
 }
 
-const APP_VER="v5.1";
+const APP_VER="v6.1";
 
 /* ══════════════════════════════════════════════════════════════════
    자동 백업 시스템
@@ -992,7 +1048,7 @@ function ensureDay(d){
   const day={date:d,big:[emptyBig(),emptyBig(),emptyBig()],subs:[],memo:"",slots:{},rit:{},fields:{}};
   /* slots을 올바른 구조로 초기화 (SLOTS 배열의 모든 시간대) */
   SLOTS.forEach(t=>{day.slots[t]={p:"",a:""};});
-  for(let i=0;i<6;i++)day.subs.push({t:"",done:false,carry:false});
+  for(let i=0;i<SUB_COUNT;i++)day.subs.push({t:"",done:false,carry:false});
   const prev=lastDayBefore(d);
   if(prev){
     const p=db.days[prev];
@@ -1031,7 +1087,7 @@ function render(){
   $("weekLabel").textContent=`${wd.getMonth()+1}/${wd.getDate()} – ${(()=>{const e=parse(addD(wk,4));return (e.getMonth()+1)+"/"+e.getDate();})()}`;
   renderBig($("weekBox"),w.big,"week");
   renderBig($("dailyBox"),d.big,"day");
-  renderSubs(d);renderMemo(d);renderRail(d);renderRit(d);
+  renderSubs(d);renderMemo(d);renderBacklog();renderRail(d);renderRit(d);
 }
 
 function renderBig(box,arr,kind){
@@ -1081,6 +1137,101 @@ function renderSubs(d){
     box.appendChild(el);
   });
 }
+function saveBacklog(){db.bu=Date.now();save();}
+
+const BL_COLLAPSE_AT=3;   // 완료 항목이 이 개수 이상이면 접어둠
+let blShowDone=false;     // 완료 항목 펼침 여부 (새로고침하면 다시 접힘)
+
+/* 항목 한 줄 만들기 */
+function blRow(b){
+  const el=document.createElement("div");
+  el.className="blitem"+(b.done?" isdone":"");
+  el.innerHTML='<input type="checkbox" class="chk">'
+    +'<input type="text" class="bt" placeholder="중장기 과제·아이디어">'
+    +'<input type="text" class="bw" placeholder="시기">'
+    +'<button class="bdel" title="삭제">&times;</button>';
+  const cb=el.querySelector(".chk"),
+        ti=el.querySelector(".bt"),
+        wi=el.querySelector(".bw"),
+        del=el.querySelector(".bdel");
+
+  cb.checked=b.done; ti.value=b.t; wi.value=b.w;
+  ti.classList.toggle("done",b.done);
+  wi.classList.toggle("done",b.done);
+
+  /* 타이핑 중에는 다시 그리지 않음 (커서가 튀지 않도록) */
+  ti.addEventListener("input",()=>{b.t=ti.value;saveBacklog();});
+  wi.addEventListener("input",()=>{b.w=wi.value;saveBacklog();});
+
+  /* 체크하면 목록 아래(완료 구역)로 내려감 */
+  cb.addEventListener("change",()=>{
+    b.done=cb.checked;
+    if(b.done)blShowDone=false;      // 완료 처리하면 다시 접어둠
+    saveBacklog();renderBacklog();
+  });
+
+  del.addEventListener("click",()=>{
+    if(b.t.trim()&&!confirm("이 항목을 삭제할까요?\n\n"+b.t))return;
+    const i=db.backlog.indexOf(b);   // 화면 순서가 아닌 실제 위치로 삭제
+    if(i>-1)db.backlog.splice(i,1);
+    saveBacklog();renderBacklog();
+  });
+  return el;
+}
+
+function renderBacklog(){
+  const box=$("blBox");box.innerHTML="";
+  if(!Array.isArray(db.backlog))db.backlog=[];
+
+  const active=db.backlog.filter(b=>!b.done);
+  const done  =db.backlog.filter(b=>b.done);
+
+  if(!db.backlog.length){
+    const e=document.createElement("div");e.className="blempty";
+    e.textContent="아직 등록된 항목이 없습니다. 아래 버튼으로 추가하세요.";
+    box.appendChild(e);
+  }
+
+  // ① 진행 중 항목 (추가한 순서 유지)
+  active.forEach(b=>box.appendChild(blRow(b)));
+
+  // ② 완료 항목 — 항상 아래로. 일정 개수를 넘으면 접어둠
+  if(done.length){
+    const collapsible=done.length>=BL_COLLAPSE_AT;
+    const open=!collapsible||blShowDone;
+
+    if(collapsible){
+      const bar=document.createElement("div");
+      bar.className="bldone-bar";
+      bar.innerHTML='<button class="bltoggle">'+(open?"▾":"▸")+" 완료 "+done.length+"개"+(open?" 숨기기":" 보기")+"</button>"
+        +'<span class="spacer"></span>'
+        +(open?'<button class="blclear">완료 항목 비우기</button>':"");
+      bar.querySelector(".bltoggle").onclick=()=>{blShowDone=!blShowDone;renderBacklog();};
+      const clr=bar.querySelector(".blclear");
+      if(clr)clr.onclick=()=>{
+        if(!confirm("완료한 "+done.length+"개 항목을 모두 삭제할까요?"))return;
+        db.backlog=db.backlog.filter(b=>!b.done);
+        saveBacklog();renderBacklog();
+      };
+      box.appendChild(bar);
+    }else{
+      const sep=document.createElement("div");sep.className="bldone-sep";
+      box.appendChild(sep);
+    }
+
+    if(open)done.forEach(b=>box.appendChild(blRow(b)));
+  }
+
+  updateBacklogSum();
+}
+function updateBacklogSum(){
+  const el=$("blSum");if(!el)return;
+  const list=db.backlog||[];
+  const total=list.filter(b=>b.t.trim()).length;
+  const done=list.filter(b=>b.t.trim()&&b.done).length;
+  el.textContent=total?done+" / "+total:"";
+}
+
 function renderMemo(d){const m=$("memo");m.value=d.memo||"";
   $("memoPrint").textContent=d.memo||"";
   m.oninput=()=>{d.memo=m.value;$("memoPrint").textContent=m.value;save();};}
@@ -1511,6 +1662,7 @@ $("fileIn").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new File
     Object.keys(n.days).forEach(k=>{n.days[k].u=t;db.days[k]=n.days[k];});
     Object.keys(n.weeks).forEach(k=>{n.weeks[k].u=t;db.weeks[k]=n.weeks[k];});
     if(n.rituals&&n.rituals.length)db.rituals=n.rituals;
+    if(n.backlog&&n.backlog.length){db.backlog=n.backlog;db.bu=t;}
     if(n.font)db.font=n.font;
 
     applyFont(db.font);
@@ -1539,6 +1691,13 @@ applyFont(db.font);
 $("fontSel").onchange=e=>{db.font=e.target.value;applyFont(db.font);save(true);
   toast("글씨체를 바꿨습니다");};
 
+$("blAdd").onclick=()=>{
+  if(!Array.isArray(db.backlog))db.backlog=[];
+  db.backlog.push({t:"",w:"",done:false});
+  saveBacklog();renderBacklog();
+  const inputs=$("blBox").querySelectorAll(".bt");
+  if(inputs.length)inputs[inputs.length-1].focus();
+};
 $("btnRestoreBackup").onclick=()=>{
   const backups=listBackups();
   if(!backups.length){alert("저장된 백업이 없습니다");return;}
