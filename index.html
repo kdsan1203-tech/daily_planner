@@ -636,6 +636,15 @@ function normDay(d,k){d=(d&&typeof d==="object")?d:{};
   d.subs=subs;
   d.memo=typeof d.memo==="string"?d.memo:"";
   d.slots=(d.slots&&typeof d.slots==="object")?d.slots:{};
+  /* slots 내의 각 항목도 {p: "", a: ""} 형태로 통일 */
+  Object.keys(d.slots).forEach(k=>{
+    const sv=d.slots[k];
+    if(!sv||typeof sv!=="object"){d.slots[k]={p:"",a:""};return;}
+    d.slots[k]={
+      p:typeof sv.p==="string"?sv.p:"",
+      a:typeof sv.a==="string"?sv.a:""
+    };
+  });
   d.rit  =(d.rit  &&typeof d.rit  ==="object")?d.rit  :{};
   d.fields=(d.fields&&typeof d.fields==="object")?d.fields:{};
   d.u=Number(d.u)||0;
@@ -678,7 +687,7 @@ function mergeDB(local,remote){
   return out;
 }
 
-const APP_VER="v5";
+const APP_VER="v5.1";
 
 /* ══════════════════════════════════════════════════════════════════
    자동 백업 시스템
@@ -981,6 +990,8 @@ function ensureDay(d){
     return db.days[d];
   }
   const day={date:d,big:[emptyBig(),emptyBig(),emptyBig()],subs:[],memo:"",slots:{},rit:{},fields:{}};
+  /* slots을 올바른 구조로 초기화 (SLOTS 배열의 모든 시간대) */
+  SLOTS.forEach(t=>{day.slots[t]={p:"",a:""};});
   for(let i=0;i<6;i++)day.subs.push({t:"",done:false,carry:false});
   const prev=lastDayBefore(d);
   if(prev){
@@ -1078,7 +1089,7 @@ function renderRail(d){
   const rail=$("rail");rail.innerHTML="";
   const nowKey=key(new Date()),nowMin=new Date().getHours()*60+new Date().getMinutes();
   SLOTS.forEach((t,i)=>{
-    const s=d.slots[t]||(d.slots[t]={p:""});
+    const s=d.slots[t]||(d.slots[t]={p:"",a:""});
     if(s.p==null&&s.a)s.p=s.a;
     const row=document.createElement("div");row.className="slot";
     const hh=parseInt(t.slice(0,2),10);
@@ -1089,7 +1100,7 @@ function renderRail(d){
       <input class="plan" placeholder="">`;
     const ip=row.querySelector("input");
     ip.value=s.p||"";
-    ip.addEventListener("input",()=>{s.p=ip.value;save();});
+    ip.addEventListener("input",()=>{s.p=ip.value;s.a="";save();});
     ip.addEventListener("change",()=>{paintRail(d);});
     if(cur===nowKey){const[h,mn]=t.split(":").map(Number);
       if(nowMin>=h*60+mn&&nowMin<h*60+mn+30)row.classList.add("now");}
