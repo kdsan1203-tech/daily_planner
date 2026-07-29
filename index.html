@@ -397,6 +397,7 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
       <div class="moreWrap">
         <button class="tool" id="btnMore" title="더보기">⋯</button>
         <div class="more" id="moreMenu">
+          <button class="tool" id="btnRestoreBackup" title="백업에서 복원">백업복원</button>
           <button class="tool" id="btnLogout" title="로그아웃" style="color:#c0261e">로그아웃</button>
           <select class="tool" id="fontSel" title="글씨체">
             <option value="sys">기본 (맑은 고딕)</option>
@@ -677,7 +678,114 @@ function mergeDB(local,remote){
   return out;
 }
 
-const APP_VER="v4";
+const APP_VER="v5";
+
+/* ══════════════════════════════════════════════════════════════════
+   자동 백업 시스템
+====================================================================== */
+
+const AUTO_BACKUP_KEY_PREFIX = "planner_backup_";
+const AUTO_BACKUP_HOUR = 18;
+const AUTO_BACKUP_MIN = 30;
+const AUTO_BACKUP_KEEP = 7;  // 최근 7개만 유지
+
+function scheduleAutoBackup() {
+  const now = new Date();
+  const target = new Date();
+  target.setHours(AUTO_BACKUP_HOUR, AUTO_BACKUP_MIN, 0, 0);
+  
+  // 이미 지난 시간이면 내일로
+  if (now >= target) {
+    target.setDate(target.getDate() + 1);
+  }
+  
+  const wait = target.getTime() - now.getTime();
+  console.log("[backup] 다음 자동 백업:", target.toLocaleString(), "("+Math.round(wait/1000/60)+"분 뒤)");
+  
+  setTimeout(() => {
+    doAutoBackup();
+    // 그 뒤로는 매 24시간마다
+    setInterval(doAutoBackup, 24 * 60 * 60 * 1000);
+  }, wait);
+}
+
+function doAutoBackup() {
+  try {
+    const now = new Date();
+    const key = AUTO_BACKUP_KEY_PREFIX + now.toISOString().slice(0, 10);
+    const backup = JSON.stringify(db);
+    
+    store.setItem(key, backup);
+    console.log("[backup] 자동 백업 저장됨:", key, backup.length + "bytes");
+    
+    // 오래된 백업 정리 (최근 N개만 유지)
+    cleanOldBackups();
+  } catch (e) {
+    console.error("[backup] 자동 백업 실패:", e);
+  }
+}
+
+function cleanOldBackups() {
+  try {
+    const keys = [];
+    for (let i = 0; i < store.length; i++) {
+      const k = store.key(i);
+      if (k && k.startsWith(AUTO_BACKUP_KEY_PREFIX)) keys.push(k);
+    }
+    keys.sort().reverse();  // 최신순 정렬
+    
+    // 오래된 것들 삭제
+    for (let i = AUTO_BACKUP_KEEP; i < keys.length; i++) {
+      store.removeItem(keys[i]);
+      console.log("[backup] 오래된 백업 삭제:", keys[i]);
+    }
+  } catch (e) {
+    console.error("[backup] 백업 정리 실패:", e);
+  }
+}
+
+function listBackups() {
+  const backups = [];
+  for (let i = 0; i < store.length; i++) {
+    const k = store.key(i);
+    if (k && k.startsWith(AUTO_BACKUP_KEY_PREFIX)) {
+      const date = k.replace(AUTO_BACKUP_KEY_PREFIX, "");
+      backups.push({ key: k, date: date });
+    }
+  }
+  return backups.sort().reverse();  // 최신순
+}
+
+function restoreBackup(key) {
+  try {
+    const backup = store.getItem(key);
+    if (!backup) {
+      alert("백업을 찾을 수 없습니다");
+      return false;
+    }
+    const data = JSON.parse(backup);
+    db = normalizeDB(data);
+    applyFont(db.font);
+    saveLocal();
+    render();
+    
+    if (useFirebase && currentUser) {
+      cloudSynced = true;
+      pushCloud();
+    }
+    
+    const date = key.replace(AUTO_BACKUP_KEY_PREFIX, "");
+    toast("백업 복원됨: " + date);
+    alert("백업이 복원되었습니다: " + date);
+    return true;
+  } catch (e) {
+    console.error("[backup] 복원 실패:", e);
+    alert("백업 복원에 실패했습니다: " + e.message);
+    return false;
+  }
+}
+
+
 /* ══ DB ══ */
 let db=loadLocal();
 
@@ -695,6 +803,8 @@ let pendingPush=false;      // 오프라인일 때 밀어둔 변경
 let cloudOnline=false;
 let cloudSynced=false;      // 클라우드 내용을 최소 1회 받아왔는지
 let cloudListenerActive=false;  // 클라우드 리스너가 이미 활성화됐는지
+let localSaved=true;        // 로컬 저장 상태
+let cloudSaveSuccess=true;  // 클라우드 저장 성공 여부
 
 function stamp(){
   const t=Date.now();
@@ -704,26 +814,50 @@ function stamp(){
 }
 
 function saveLocal(){
-  try{store.setItem(KEY,JSON.stringify(db));return true;}
-  catch(e){console.error("[save] 로컬 저장 실패",e);return false;}
+  try{
+    store.setItem(KEY,JSON.stringify(db));
+    localSaved=true;
+    return true;
+  }catch(e){
+    localSaved=false;
+    console.error("[save] 로컬 저장 실패",e);
+    return false;
+  }
 }
 
+let pushRetry={timer:null,count:0,maxRetries:5};
 function pushCloud(){
   if(!useFirebase||!fdb)return;
-  /* 클라우드 내용을 아직 한 번도 못 받아온 상태에서 밀어올리면
-     이 기기의 오래된(혹은 빈) 데이터가 클라우드를 덮어씁니다. 반드시 대기. */
   if(!cloudSynced){pendingPush=true;flag("클라우드 확인 중…");return;}
   if(!cloudOnline){pendingPush=true;flag("오프라인 · 기기에 저장됨");return;}
+  
   pendingPush=false;
   db._by=CLIENT_ID; db._ts=Date.now();
   flag("동기화 중…");
-  fdb.ref(CLOUD_PATH).set(JSON.parse(JSON.stringify(db)))
-    .then(()=>flag("☁ 동기화됨 "+new Date().toTimeString().slice(0,5)))
-    .catch(err=>{
-      pendingPush=true;
-      console.error("[sync] 쓰기 실패",err);
-      flag(err&&err.code==="PERMISSION_DENIED"?"⚠ 규칙 거부(쓰기)":"⚠ 동기화 실패");
-    });
+  
+  const attempt=()=>{
+    fdb.ref(CLOUD_PATH).set(JSON.parse(JSON.stringify(db)))
+      .then(()=>{
+        pushRetry.count=0;
+        cloudSaveSuccess=true;
+        flag("☁ 동기화됨 "+new Date().toTimeString().slice(0,5));
+        clearTimeout(pushRetry.timer);
+      })
+      .catch(err=>{
+        console.error("[sync] 쓰기 실패(시도 "+(pushRetry.count+1)+"/"+pushRetry.maxRetries+")",err);
+        if(pushRetry.count<pushRetry.maxRetries){
+          pushRetry.count++;
+          const wait=Math.pow(2,pushRetry.count)*1000;
+          flag("⚠ 재시도 중 ("+pushRetry.count+"/"+pushRetry.maxRetries+")");
+          pushRetry.timer=setTimeout(attempt,wait);
+        }else{
+          cloudSaveSuccess=false;
+          pendingPush=true;
+          flag(err&&err.code==="PERMISSION_DENIED"?"⚠ 규칙 거부(쓰기)":"⚠ 동기화 실패");
+        }
+      });
+  };
+  attempt();
 }
 
 function save(now){
@@ -742,7 +876,13 @@ function save(now){
   else{flag("입력 중…");saveTimer=setTimeout(go,800);}
 }
 
-function flag(t){const el=document.getElementById("saveflag");if(el)el.textContent=t;}
+function flag(t,icon=""){
+  const el=document.getElementById("saveflag");
+  if(!el)return;
+  el.textContent=t;
+  // 상태 아이콘 추가 (선택사항)
+  if(icon){el.style.color=icon==="ok"?"#16a34a":icon==="warn"?"#ea580c":"#c0261e";}
+}
 
 /* ══ 날짜 ══ */
 const DOW=["일","월","화","수","목","금","토"];
@@ -1388,6 +1528,18 @@ applyFont(db.font);
 $("fontSel").onchange=e=>{db.font=e.target.value;applyFont(db.font);save(true);
   toast("글씨체를 바꿨습니다");};
 
+$("btnRestoreBackup").onclick=()=>{
+  const backups=listBackups();
+  if(!backups.length){alert("저장된 백업이 없습니다");return;}
+  const opts=backups.map((b,i)=>"["+i+"] "+b.date).join("\n");
+  const choice=prompt("복원할 백업을 선택하세요 (숫자):\n\n"+opts);
+  if(choice===null)return;
+  const idx=parseInt(choice);
+  if(idx<0||idx>=backups.length){alert("잘못된 선택");return;}
+  if(confirm("정말 "+backups[idx].date+" 백업으로 복원하겠습니까?\n\n현재 데이터가 덮어씌워집니다.")){
+    restoreBackup(backups[idx].key);
+  }
+};
 $("btnLogout").onclick=()=>{if(confirm("로그아웃하시겠습니까?")){logout();alert("로그아웃되었습니다");}};
 $("btnMore").onclick=e=>{e.stopPropagation();$("moreMenu").classList.toggle("open");};
 document.addEventListener("click",e=>{
@@ -1483,6 +1635,24 @@ if (useFirebase && fdb) {
 }
 
 /* 인증 상태 감시 — 사용자가 로그인/로그아웃하면 즉시 감지 */
+
+/* 다중 기기 감시: 같은 사용자가 여러 곳에서 동시에 접속하면 감지 */
+let lastSeenDeviceId = null;
+let deviceConflictWarned = false;
+
+function checkDeviceConflict(remote) {
+  if (!remote || !remote._by) return;
+  if (remote._by === CLIENT_ID) return;  // 내 기기라서 무시
+  if (lastSeenDeviceId && lastSeenDeviceId !== remote._by) {
+    // 다른 기기에서 변경이 감지됨
+    if (!deviceConflictWarned) {
+      toast("⚠️ 다른 기기에서 동시에 열려있을 수 있습니다. 충돌 위험이 있습니다.");
+      deviceConflictWarned = true;
+    }
+  }
+  lastSeenDeviceId = remote._by;
+}
+
 function initAuthListener() {
   if (!auth) return;
   auth.onAuthStateChanged((user) => {
@@ -1501,6 +1671,9 @@ function initAuthListener() {
       if (useFirebase && fdb && !cloudListenerActive) {
         startCloudSync();
       }
+      
+      // 자동 백업 스케줄 시작
+      scheduleAutoBackup();
     } else {
       // ✗ 로그인 안 됨 → 로그인 화면 표시
       wall.style.display = "flex";
@@ -1587,6 +1760,7 @@ function startCloudSync(){
     }
 
     // (c) 다른 기기의 변경 → 입력 중이면 미뤘다가 반영
+    checkDeviceConflict(remote);
     if(isTyping()){pendingRemote=remote;flag("☁ 새 변경 대기 중");return;}
     applyRemote(remote);
     cloudSynced=true;
@@ -1609,6 +1783,11 @@ if(!useFirebase){
 
 /* 인증 리스너 시작 (가장 마지막에) */
 initAuthListener();
+
+/* 자동 백업 스케줄 시작 (클라우드 없이도 로컬 백업 유지) */
+if(!useFirebase){
+  scheduleAutoBackup();
+}
 </script>
 </body>
 </html>
