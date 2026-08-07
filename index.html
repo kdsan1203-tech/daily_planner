@@ -213,14 +213,16 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .fieldin:focus{outline:none;border-bottom-color:var(--week)}
 
 /* ── 타임레일 ─────────────────────────── */
-.railhead{display:grid;grid-template-columns:58px 6px 1fr;gap:0 8px;padding:6px 14px;
+.railhead{display:grid;grid-template-columns:62px 6px 1fr;gap:0 8px;padding:6px 14px;
   font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--ink3);border-bottom:1px solid var(--rule2)}
 .rail{padding:0 14px 12px;display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
-.slot{display:grid;grid-template-columns:58px 6px 1fr;gap:0 8px;align-items:stretch;
-  flex:1 1 0;min-height:30px}
+.slot{display:grid;grid-template-columns:62px 6px 1fr;gap:0 8px;align-items:stretch;
+  flex:1 1 0;min-height:34px}
 .slot .t{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink2);
-  display:flex;align-items:center;justify-content:center;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.12;
   font-variant-numeric:tabular-nums;border-top:1px solid rgba(0,0,0,.06)}
+.slot .t b{font-weight:600}
+.slot .t i{font-style:normal;font-size:10px;font-weight:400;color:var(--ink3);letter-spacing:-.02em}
 .slot.band-dawn .t{background:var(--dawn-bg);border-left:3px solid var(--dawn-ln)}
 .slot.band-work .t{background:var(--work-bg);border-left:3px solid var(--work-ln)}
 .slot.band-eve  .t{background:var(--eve-bg); border-left:3px solid var(--eve-ln)}
@@ -323,8 +325,9 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
   .rail{padding:0 10px 8px}
   .railhead{padding:4px 10px}
   .slot,.railhead{grid-template-columns:48px 5px 1fr}
-  .slot{min-height:27px}
-  .slot .t{font-size:12px}
+  .slot{min-height:31px;grid-template-columns:58px 6px 1fr}
+  .slot .t{font-size:11.5px}
+  .slot .t i{font-size:9px}
   .slot input{padding:3px 4px;font-size:13.5px}
   .rrow{grid-template-columns:64px 1fr;padding:4px 10px}
   .tool{padding:0 9px;font-size:12.5px}
@@ -404,7 +407,8 @@ input,textarea{font-family:inherit;font-size:inherit;color:inherit}
     grid-template-columns:34px 4px 1fr!important;gap:0 4px!important}
   body:not(.printing) .slot{flex:none!important;height:7.2mm!important;min-height:0!important;
     grid-template-columns:34px 4px 1fr!important;gap:0 4px!important}
-  body:not(.printing) .slot .t{font-size:6.8pt!important;border-left-width:2px!important}
+  body:not(.printing) .slot .t{font-size:6.8pt!important;border-left-width:2px!important;line-height:1.05!important}
+  body:not(.printing) .slot .t i{font-size:5.2pt!important}
   body:not(.printing) .slot input{font-size:7.5pt!important;padding:0 3px!important}
   body:not(.printing) .now::before{display:none}
 
@@ -639,6 +643,7 @@ const store=(()=>{try{localStorage.setItem("__t","1");localStorage.removeItem("_
   catch(e){const m={};return{getItem:k=>k in m?m[k]:null,setItem:(k,v)=>{m[k]=v},removeItem:k=>{delete m[k]}};}})();
 const KEY="daily-plan-v1";
 const SUB_COUNT=8;              // SUB THINGS 칸 수
+const BIGSUB_COUNT=3;           // Big 항목당 세부 실행 칸 수
 const CLIENT_ID=(()=>{try{let c=store.getItem("daily-plan-client");
   if(!c){c=Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
   store.setItem("daily-plan-client",c);}return c;}catch(e){return "tmp"+Math.random().toString(36).slice(2,8);}})();
@@ -692,7 +697,7 @@ function toArr(v){
 function normSub(s){s=s||{};return{t:typeof s.t==="string"?s.t:"",done:!!s.done};}
 function normBig(b){b=b||{};
   const subs=toArr(b.subs).map(normSub);
-  while(subs.length<2)subs.push({t:"",done:false});
+  while(subs.length<BIGSUB_COUNT)subs.push({t:"",done:false});
   const o={t:typeof b.t==="string"?b.t:"",done:!!b.done,carry:!!b.carry,subs};
   if(typeof b.ct==="string")o.ct=b.ct;      // 이월 원본 문구 보존
   if(typeof b.cd==="string")o.cd=b.cd;      // 내가 지운 이월 항목 기억
@@ -773,7 +778,7 @@ function mergeDB(local,remote){
   return out;
 }
 
-const APP_VER="v7";
+const APP_VER="v8";
 
 /* ══════════════════════════════════════════════════════════════════
    자동 백업 시스템
@@ -989,7 +994,9 @@ function mondayOf(s){const d=parse(s);const w=(d.getDay()+6)%7;d.setDate(d.getDa
 let cur=key(new Date());
 
 /* ══ 하루 데이터 ══ */
-const emptyBig=()=>({t:"",done:false,subs:[{t:"",done:false},{t:"",done:false}]});
+const emptyBig=()=>{const s=[];
+  for(let i=0;i<BIGSUB_COUNT;i++)s.push({t:"",done:false});
+  return{t:"",done:false,subs:s};};
 function ensureWeek(wk){
   if(!db.weeks[wk])db.weeks[wk]={big:[emptyBig(),emptyBig(),emptyBig()]};
   const w=db.weeks[wk];while(w.big.length<3)w.big.push(emptyBig());return w;
@@ -1099,6 +1106,9 @@ function ensureDay(d){
 /* ══ 시간 슬롯 ══ */
 const SLOTS=(()=>{const a=[];for(let m=5*60;m<22*60;m+=30){
   a.push(pad(Math.floor(m/60))+":"+pad(m%60));}return a;})();
+/* "09:00" → "09:00~09:30" 형태의 구간 표기 */
+const slotEnd=t=>{const[h,m]=t.split(":").map(Number);
+  const e=h*60+m+30;return pad(Math.floor(e/60)%24)+":"+pad(e%60);};
 const BLOCKC=["#4E6E8E","#7A6A9B","#2F7D6E","#A2653C","#8E4A5E","#5B7A3E","#3E6E92","#8A6A3B"];
 const hue=s=>{let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))%997;return BLOCKC[h%BLOCKC.length];};
 
@@ -1277,7 +1287,7 @@ function renderRail(d){
     row.classList.add(hh<9?"band-dawn":hh<18?"band-work":"band-eve");
     if(t.endsWith(":00"))row.classList.add("hourtop");
     if(t==="12:00"||t==="12:30")row.classList.add("lunch");
-    row.innerHTML=`<div class="t">${t}</div><div class="spine"></div>
+    row.innerHTML=`<div class="t"><b>${t}</b><i>~${slotEnd(t)}</i></div><div class="spine"></div>
       <input class="plan" placeholder="">`;
     const ip=row.querySelector("input");
     ip.value=s.p||"";
