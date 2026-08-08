@@ -805,82 +805,148 @@ function mergeDB(local,remote){
   return out;
 }
 
-const APP_VER="v8.1";
+const APP_VER="v9";
 
 /* ══════════════════════════════════════════════════════════════════
    자동 백업 시스템
 ====================================================================== */
 
-const AUTO_BACKUP_KEY_PREFIX = "planner_backup_";
-const AUTO_BACKUP_HOUR = 18;
-const AUTO_BACKUP_MIN = 30;
-const AUTO_BACKUP_KEEP = 7;  // 최근 7개만 유지
+const BK_PREFIX  = "planner_backup_";   // 일자별 스냅샷
+const BK_SNAP    = "planner_snap_";     // 변경 직전 자동 스냅샷
+const BK_LAST    = "planner_backup_last";
+const BK_KEEP    = 10;   // 일자별 보관 개수
+const BK_SNAPKEEP= 8;    // 직전 스냅샷 보관 개수
 
-function scheduleAutoBackup() {
-  const now = new Date();
-  const target = new Date();
-  target.setHours(AUTO_BACKUP_HOUR, AUTO_BACKUP_MIN, 0, 0);
-  
-  // 이미 지난 시간이면 내일로
-  if (now >= target) {
-    target.setDate(target.getDate() + 1);
-  }
-  
-  const wait = target.getTime() - now.getTime();
-  console.log("[backup] 다음 자동 백업:", target.toLocaleString(), "("+Math.round(wait/1000/60)+"분 뒤)");
-  
-  setTimeout(() => {
-    doAutoBackup();
-    // 그 뒤로는 매 24시간마다
-    setInterval(doAutoBackup, 24 * 60 * 60 * 1000);
-  }, wait);
+/* 내용이 있는 데이터인지 (빈 상태를 백업으로 남기지 않기 위함) */
+function dbHasContent(x){
+  if(!x)return false;
+  if(x.days&&Object.keys(x.days).some(k=>dayHasContent(x.days[k])))return true;
+  if(x.weeks&&Object.keys(x.weeks).some(k=>weekHasContent(x.weeks[k])))return true;
+  if(Array.isArray(x.backlog)&&x.backlog.some(b=>b&&b.t&&b.t.trim()))return true;
+  return false;
+}
+function dbSize(x){
+  try{
+    const d=Object.keys(x.days||{}).filter(k=>dayHasContent(x.days[k])).length;
+    const w=Object.keys(x.weeks||{}).filter(k=>weekHasContent(x.weeks[k])).length;
+    return {d:d,w:w};
+  }catch(e){return {d:0,w:0};}
 }
 
-function doAutoBackup() {
-  try {
-    const now = new Date();
-    const key = AUTO_BACKUP_KEY_PREFIX + now.toISOString().slice(0, 10);
-    const backup = JSON.stringify(db);
-    
-    store.setItem(key, backup);
-    console.log("[backup] 자동 백업 저장됨:", key, backup.length + "bytes");
-    
-    // 오래된 백업 정리 (최근 N개만 유지)
-    cleanOldBackups();
-  } catch (e) {
-    console.error("[backup] 자동 백업 실패:", e);
-  }
-}
-
-function cleanOldBackups() {
-  try {
-    const keys = [];
-    for (let i = 0; i < store.length; i++) {
-      const k = store.key(i);
-      if (k && k.startsWith(AUTO_BACKUP_KEY_PREFIX)) keys.push(k);
+function writeBackup(key,label){
+  try{
+    if(!dbHasContent(db)){console.log("[backup] 내용 없음 - 건너뜀");return false;}
+    store.setItem(key,JSON.stringify(db));
+    const n=dbSize(db);
+    console.log("[backup] "+label+" 저장:",key,"("+n.d+"일 "+n.w+"주)");
+    return true;
+  }catch(e){
+    console.error("[backup] 저장 실패:",e);
+    /* 용량이 찼으면 오래된 것부터 비우고 한 번 더 시도 */
+    if(e&&(e.name==="QuotaExceededError"||e.code===22)){
+      pruneBackups(BK_SNAP,2);pruneBackups(BK_PREFIX,4);
+      try{store.setItem(key,JSON.stringify(db));return true;}catch(e2){}
     }
-    keys.sort().reverse();  // 최신순 정렬
-    
-    // 오래된 것들 삭제
-    for (let i = AUTO_BACKUP_KEEP; i < keys.length; i++) {
-      store.removeItem(keys[i]);
-      console.log("[backup] 오래된 백업 삭제:", keys[i]);
-    }
-  } catch (e) {
-    console.error("[backup] 백업 정리 실패:", e);
+    return false;
   }
 }
 
-function listBackups() {
-  const backups = [];
-  for (let i = 0; i < store.length; i++) {
-    const k = store.key(i);
-    if (k && k.startsWith(AUTO_BACKUP_KEY_PREFIX)) {
-      const date = k.replace(AUTO_BACKUP_KEY_PREFIX, "");
-      backups.push({ key: k, date: date });
+function pruneBackups(prefix,keep){
+  try{
+    const ks=[];
+    for(let i=0;i<store.length;i++){const k=store.key(i);
+      if(k&&k.indexOf(prefix)===0)ks.push(k);}
+    ks.sort().reverse();
+    for(let i=keep;i<ks.length;i++){store.removeItem(ks[i]);}
+  }catch(e){console.error("[backup] 정리 실패:",e);}
+}
+
+/* ① 하루 한 번 — 앱을 열거나 되돌아올 때, 마지막 백업이 오늘이 아니면 즉시 실행.
+      기존에는 오후 6:30 정각에 창이 떠 있어야만 돌아서, 실제로는 한 번도
+      실행되지 않았습니다. 이제 시각과 무관하게 그날 첫 사용 때 남습니다. */
+function dailyBackupIfNeeded(){
+  try{
+    const today=key(new Date());
+    if(store.getItem(BK_LAST)===today)return;
+    if(writeBackup(BK_PREFIX+today,"일자별")){
+      store.setItem(BK_LAST,today);
+      pruneBackups(BK_PREFIX,BK_KEEP);
+    }
+  }catch(e){console.error("[backup] 일일 백업 실패:",e);}
+}
+
+/* ② 변경 직전 스냅샷 — 데이터가 줄어드는 순간, "줄어들기 전" 상태를 보관.
+      이번처럼 기록이 비어버리는 사고에서 되돌릴 수 있는 안전망입니다.
+      ★ 사고가 난 뒤의 db를 저장하면 의미가 없으므로, 직전 사본을 들고 있다가 그것을 씁니다. */
+let lastSize={d:0,w:0};
+let lastGood=null;          // 마지막으로 정상이었던 시점의 사본
+function rememberGood(){
+  try{
+    if(!dbHasContent(db))return;
+    lastGood=JSON.stringify(db);
+    lastSize=dbSize(db);
+  }catch(e){}
+}
+function writeRaw(key,json,label){
+  try{
+    store.setItem(key,json);
+    console.log("[backup] "+label+" 저장:",key);
+    return true;
+  }catch(e){
+    if(e&&(e.name==="QuotaExceededError"||e.code===22)){
+      pruneBackups(BK_SNAP,2);pruneBackups(BK_PREFIX,4);
+      try{store.setItem(key,json);return true;}catch(e2){}
+    }
+    console.error("[backup] 저장 실패:",e);
+    return false;
+  }
+}
+function snapshotIfShrinking(){
+  try{
+    const now=dbSize(db);
+    if(!lastGood){rememberGood();return;}
+    const shrank=(now.d<lastSize.d)||(now.w<lastSize.w);
+    if(shrank){
+      console.warn("[backup] 기록이 줄었습니다 - 줄기 전 상태를 보관합니다");
+      writeRaw(BK_SNAP+new Date().toISOString().replace(/[:.]/g,"-"),lastGood,"직전 스냅샷");
+      pruneBackups(BK_SNAP,BK_SNAPKEEP);
+    }
+    rememberGood();
+  }catch(e){}
+}
+
+/* ③ 원격 데이터를 반영하기 직전 — 다른 기기가 보낸 내용으로 덮기 전에 현 상태 보관 */
+function snapshotBeforeRemote(){
+  try{
+    if(!dbHasContent(db))return;
+    rememberGood();     // 현재 상태를 정상 사본으로 기록
+    writeRaw(BK_SNAP+new Date().toISOString().replace(/[:.]/g,"-"),lastGood,"원격 반영 전");
+    pruneBackups(BK_SNAP,BK_SNAPKEEP);
+  }catch(e){}
+}
+
+function scheduleAutoBackup(){
+  rememberGood();                              // 시작 시점의 정상 사본 확보
+  dailyBackupIfNeeded();                       // 지금 당장 한 번
+  setInterval(dailyBackupIfNeeded,30*60*1000); // 30분마다 날짜 넘어갔는지 확인
+  document.addEventListener("visibilitychange",()=>{
+    if(!document.hidden)dailyBackupIfNeeded(); // 탭으로 돌아올 때도 확인
+  });
+  console.log("[backup] 자동 백업 활성화");
+}
+
+function listBackups(){
+  const out=[];
+  for(let i=0;i<store.length;i++){
+    const k=store.key(i);if(!k)continue;
+    if(k.indexOf(BK_PREFIX)===0&&k!==BK_LAST){
+      out.push({key:k,date:k.replace(BK_PREFIX,""),kind:"일자별"});
+    }else if(k.indexOf(BK_SNAP)===0){
+      const raw=k.replace(BK_SNAP,"");
+      out.push({key:k,date:raw.slice(0,10)+" "+raw.slice(11,16).replace("-",":"),kind:"자동"});
     }
   }
-  return backups.sort().reverse();  // 최신순
+  return out.sort((a,b)=>a.key<b.key?1:-1);
 }
 
 function restoreBackup(key) {
@@ -1009,6 +1075,7 @@ function save(now){
   clearTimeout(saveTimer);
   const go=()=>{
     stamp();
+    snapshotIfShrinking();
     const okLocal=saveLocal();
     if(!useFirebase){flag(okLocal?"이 기기에 저장됨":"⚠ 저장 실패");return;}
     if(!okLocal)flag("⚠ 로컬 저장 실패");
@@ -1845,13 +1912,21 @@ $("blAdd").onclick=()=>{
 };
 $("btnRestoreBackup").onclick=()=>{
   const backups=listBackups();
-  if(!backups.length){alert("저장된 백업이 없습니다");return;}
-  const opts=backups.map((b,i)=>"["+i+"] "+b.date).join("\n");
-  const choice=prompt("복원할 백업을 선택하세요 (숫자):\n\n"+opts);
+  if(!backups.length){
+    alert("저장된 백업이 아직 없습니다.\n\n하루에 한 번, 처음 사용할 때 자동으로 저장됩니다.");
+    return;
+  }
+  const opts=backups.map((b,i)=>{
+    let n={d:0,w:0};
+    try{const x=JSON.parse(store.getItem(b.key));n=dbSize(normalizeDB(x));}catch(e){}
+    return "["+i+"] "+b.date+"  ("+b.kind+", "+n.d+"일 "+n.w+"주)";
+  }).join("\n");
+  const choice=prompt("복원할 백업을 선택하세요 (숫자):\n\n"+opts+"\n\n"
+    +"※ 현재 기록과 합쳐지며, 내용이 있는 쪽이 우선됩니다.");
   if(choice===null)return;
   const idx=parseInt(choice);
-  if(idx<0||idx>=backups.length){alert("잘못된 선택");return;}
-  if(confirm("정말 "+backups[idx].date+" 백업으로 복원하겠습니까?\n\n현재 데이터가 덮어씌워집니다.")){
+  if(!(idx>=0&&idx<backups.length)){alert("잘못된 선택입니다");return;}
+  if(confirm(backups[idx].date+" 백업으로 복원할까요?")){
     restoreBackup(backups[idx].key);
   }
 };
@@ -1908,6 +1983,7 @@ function isTyping(){
 let pendingRemote=null;
 
 function applyRemote(remote){
+  snapshotBeforeRemote();
   applyingRemote=true;
   try{
     if(!cloudSynced)dropEmptyShells();   // 첫 수신: 빈 껍데기 제거 후 병합
