@@ -759,6 +759,33 @@ function normalizeDB(raw){
 
 /* ══ 병합: 원격을 그대로 덮어쓰지 않고, 더 최근 것만 채택 ══
    (사무실/집에서 동시에 열어두어도 한쪽 기록이 사라지지 않도록) */
+/* 내용이 있는지 판정 — 빈 껍데기가 실제 기록을 덮어쓰지 못하게 하는 기준 */
+function hasBig(list){return toArr(list).some(b=>b&&(
+  (typeof b.t==="string"&&b.t.trim())||
+  toArr(b.subs).some(x=>x&&typeof x.t==="string"&&x.t.trim())));}
+function dayHasContent(d){
+  if(!d)return false;
+  if(hasBig(d.big))return true;
+  if(toArr(d.subs).some(x=>x&&x.t&&x.t.trim()))return true;
+  if(d.memo&&d.memo.trim())return true;
+  if(d.slots&&Object.keys(d.slots).some(k=>{const v=d.slots[k];
+    return v&&((v.p&&v.p.trim())||(v.a&&v.a.trim()));}))return true;
+  if(d.rit&&Object.keys(d.rit).some(k=>d.rit[k]))return true;
+  if(d.fields&&Object.keys(d.fields).some(k=>(d.fields[k]||"").trim()))return true;
+  return false;
+}
+function weekHasContent(w){return !!w&&hasBig(w.big);}
+
+/* 한쪽만 내용이 있으면 그쪽을 채택. 둘 다 있으면 시각으로 비교.
+   ★ 빈 쪽이 시각만 최신이라는 이유로 이기는 일은 없어야 합니다. */
+function pick(l,r,hasContent){
+  const lc=hasContent(l),rc=hasContent(r);
+  if(lc&&!rc)return "local";
+  if(rc&&!lc)return "remote";
+  if(!lc&&!rc)return r?"remote":"local";
+  return (l.u||0)>(r.u||0)?"local":"remote";
+}
+
 let mergeKeptLocal=false;
 function mergeDB(local,remote){
   const out=normalizeDB(remote);
@@ -766,11 +793,11 @@ function mergeDB(local,remote){
   mergeKeptLocal=false;
   Object.keys(L.days).forEach(k=>{
     const l=L.days[k],r=out.days[k];
-    if(!r||(l.u||0)>(r.u||0)){out.days[k]=l;mergeKeptLocal=true;}
+    if(!r||pick(l,r,dayHasContent)==="local"){out.days[k]=l;mergeKeptLocal=true;}
   });
   Object.keys(L.weeks).forEach(k=>{
     const l=L.weeks[k],r=out.weeks[k];
-    if(!r||(l.u||0)>(r.u||0)){out.weeks[k]=l;mergeKeptLocal=true;}
+    if(!r||pick(l,r,weekHasContent)==="local"){out.weeks[k]=l;mergeKeptLocal=true;}
   });
   if(!remote||!remote.rituals)out.rituals=L.rituals;
   if((L.bu||0)>(out.bu||0)){out.backlog=L.backlog;out.bu=L.bu;mergeKeptLocal=true;}
@@ -778,7 +805,7 @@ function mergeDB(local,remote){
   return out;
 }
 
-const APP_VER="v8";
+const APP_VER="v8.1";
 
 /* ══════════════════════════════════════════════════════════════════
    자동 백업 시스템
@@ -863,8 +890,20 @@ function restoreBackup(key) {
       alert("백업을 찾을 수 없습니다");
       return false;
     }
-    const data = JSON.parse(backup);
-    db = normalizeDB(data);
+    const data = normalizeDB(JSON.parse(backup));
+    /* 복원본과 현재 데이터를 합쳐, 백업 이후에 적은 내용이 사라지지 않게 함 */
+    const t = Date.now();
+    Object.keys(data.days).forEach(k=>{
+      const b=data.days[k], c=db.days[k];
+      if(!c||pick(b,c,dayHasContent)==="local"){b.u=t;db.days[k]=b;}
+    });
+    Object.keys(data.weeks).forEach(k=>{
+      const b=data.weeks[k], c=db.weeks[k];
+      if(!c||pick(b,c,weekHasContent)==="local"){b.u=t;db.weeks[k]=b;}
+    });
+    if(data.rituals&&data.rituals.length)db.rituals=data.rituals;
+    if(data.backlog&&data.backlog.length){db.backlog=data.backlog;db.bu=t;}
+    if(data.font)db.font=data.font;
     applyFont(db.font);
     saveLocal();
     render();
@@ -908,9 +947,12 @@ let cloudSaveSuccess=true;  // 클라우드 저장 성공 여부
 
 function stamp(){
   const t=Date.now();
-  if(db.days[cur])db.days[cur].u=t;
-  const wk=mondayOf(cur);
-  if(db.weeks[wk])db.weeks[wk].u=t;
+  /* 내용이 없는 껍데기에 최신 시각을 찍으면, 그 빈 데이터가 병합에서
+     클라우드의 실제 기록을 이겨버립니다. 내용이 있을 때만 찍습니다. */
+  const d=db.days[cur];
+  if(d&&dayHasContent(d))d.u=t;
+  const wk=mondayOf(cur),w=db.weeks[wk];
+  if(w&&weekHasContent(w))w.u=t;
 }
 
 function saveLocal(){
@@ -1000,6 +1042,11 @@ const emptyBig=()=>{const s=[];
 function ensureWeek(wk){
   if(!db.weeks[wk])db.weeks[wk]={big:[emptyBig(),emptyBig(),emptyBig()]};
   const w=db.weeks[wk];while(w.big.length<3)w.big.push(emptyBig());return w;
+}
+/* 클라우드 첫 수신 전에 만들어진 빈 껍데기를 정리 — 실제 기록이 도착할 자리를 비워둠 */
+function dropEmptyShells(){
+  Object.keys(db.days).forEach(k=>{if(!dayHasContent(db.days[k]))delete db.days[k];});
+  Object.keys(db.weeks).forEach(k=>{if(!weekHasContent(db.weeks[k]))delete db.weeks[k];});
 }
 function lastDayBefore(d){
   const ks=Object.keys(db.days).filter(k=>k<d).sort();return ks.length?ks[ks.length-1]:null;
@@ -1863,6 +1910,7 @@ let pendingRemote=null;
 function applyRemote(remote){
   applyingRemote=true;
   try{
+    if(!cloudSynced)dropEmptyShells();   // 첫 수신: 빈 껍데기 제거 후 병합
     db=mergeDB(db,remote);
     applyFont(db.font);
     saveLocal();
