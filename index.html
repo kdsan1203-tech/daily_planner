@@ -805,7 +805,7 @@ function mergeDB(local,remote){
   return out;
 }
 
-const APP_VER="v9";
+const APP_VER="v9.1";
 
 /* ══════════════════════════════════════════════════════════════════
    자동 백업 시스템
@@ -949,7 +949,7 @@ function listBackups(){
   return out.sort((a,b)=>a.key<b.key?1:-1);
 }
 
-function restoreBackup(key) {
+function restoreBackup(key, label) {
   try {
     const backup = store.getItem(key);
     if (!backup) {
@@ -979,7 +979,7 @@ function restoreBackup(key) {
       pushCloud();
     }
     
-    const date = key.replace(AUTO_BACKUP_KEY_PREFIX, "");
+    const date = label || String(key).replace(BK_SNAP,"").replace(BK_PREFIX,"");
     toast("백업 복원됨: " + date);
     alert("백업이 복원되었습니다: " + date);
     return true;
@@ -1927,7 +1927,7 @@ $("btnRestoreBackup").onclick=()=>{
   const idx=parseInt(choice);
   if(!(idx>=0&&idx<backups.length)){alert("잘못된 선택입니다");return;}
   if(confirm(backups[idx].date+" 백업으로 복원할까요?")){
-    restoreBackup(backups[idx].key);
+    restoreBackup(backups[idx].key, backups[idx].date);
   }
 };
 $("btnLogout").onclick=()=>{if(confirm("로그아웃하시겠습니까?")){logout();alert("로그아웃되었습니다");}};
