@@ -6,155 +6,252 @@
 <style>
 :root{
   --paper:#F6F5F2; --card:#fff; --ink:#1E1C19; --ink2:#4A4641; --ink3:#8B857D;
-  --rule:#E2DFD8; --rule2:#EEECE7; --accent:#1F4E9C; --warn:#C0261E; --ok:#3B7A5C;
+  --rule:#E2DFD8; --rule2:#EEECE7; --accent:#1F4E9C; --warn:#C0261E; --ok:#3B7A5C; --mark:#F2C744;
   --mono:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",Menlo,monospace;
   --sans:system-ui,-apple-system,"Segoe UI","Malgun Gothic","맑은 고딕",sans-serif;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
-h1{font-size:18px;margin:0}
 .topbar{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--rule);
-  padding:12px 16px;display:flex;align-items:center;gap:10px;z-index:10}
-.badge{background:#F2C744;color:#4A3B00;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
-.wrap{max-width:900px;margin:0 auto;padding:16px}
+  padding:10px 16px;display:flex;align-items:center;gap:10px;z-index:20;flex-wrap:wrap}
+.topbar .rule{position:absolute;left:0;right:0;top:0;height:3px;background:var(--mark)}
+.badge{background:var(--mark);color:#4A3B00;font-size:11px;font-weight:700;padding:3px 9px;border-radius:4px}
+h1{font-size:17px;margin:0;font-weight:700}
+.who{margin-left:auto;font-size:12px;color:var(--ink3)}
+.wrap{max-width:960px;margin:0 auto;padding:16px}
 .card{background:var(--card);border:1px solid var(--rule);border-radius:10px;margin-bottom:14px;overflow:hidden}
-.card>header{padding:9px 14px;border-bottom:1px solid var(--rule2);font-weight:700;font-size:13px;
-  letter-spacing:.02em;color:var(--accent)}
+.card>header{padding:9px 14px;border-bottom:1px solid var(--rule2);font-weight:700;font-size:12.5px;
+  color:var(--accent);display:flex;align-items:center;gap:8px}
+.card>header .n{font-family:var(--mono);color:var(--ink3);font-size:11px}
+.card>header .sp{flex:1}
 .card .body{padding:12px 14px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-.field{display:flex;flex-direction:column;gap:4px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
 .field label{font-size:11px;color:var(--ink3);font-weight:600}
 .field input,.field select,.field textarea{border:1px solid var(--rule);border-radius:6px;padding:7px 8px;
-  font-family:inherit;font-size:13px;background:#fff}
-.field textarea{resize:vertical;min-height:60px}
-.checkline{display:flex;align-items:center;gap:8px;padding:4px 0}
-.checkline input{width:16px;height:16px}
-.steps{width:100%;border-collapse:collapse;margin-top:6px}
-.steps th,.steps td{border:1px solid var(--rule2);padding:5px;font-size:12.5px}
-.steps th{background:#FBFAF8;color:var(--ink3);font-weight:600}
+  font-family:inherit;font-size:13px;background:#fff;width:100%}
+.field textarea{resize:vertical;min-height:58px}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(31,78,156,.1)}
+.checkline{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px}
+.checkline input{width:17px;height:17px;flex:none}
+.note{font-size:11.5px;color:var(--ink3);margin-top:6px}
+.alert{border-radius:7px;padding:9px 11px;font-size:12.5px;margin-top:10px;display:none}
+.alert.show{display:block}
+.alert.bad{background:#FBEEEC;border:1px solid #E9C4BF;color:var(--warn);font-weight:600}
+.alert.good{background:#EEF6F1;border:1px solid #B9DBC8;color:var(--ok)}
+.alert.warn{background:#FDF6E3;border:1px solid #EBD9A5;color:#8A6B1B}
+table.steps{width:100%;border-collapse:collapse}
+.steps th,.steps td{border:1px solid var(--rule2);padding:4px 5px;font-size:12.5px}
+.steps th{background:#FBFAF8;color:var(--ink3);font-weight:600;font-size:11px}
+.steps td.no{text-align:center;font-family:var(--mono);color:var(--ink3);width:34px}
+.steps td.rate{text-align:right;font-family:var(--mono);color:var(--ink3);width:74px;font-size:11.5px}
 .steps input{width:100%;border:0;padding:3px;font-family:inherit;font-size:12.5px;background:transparent}
-.steps input:focus{outline:1px solid var(--accent);background:#fff}
-.rowbtns{display:flex;gap:6px;margin-top:8px}
-.btn{border:1px solid var(--rule);background:#fff;border-radius:6px;padding:7px 14px;font-size:13px;cursor:pointer}
+.steps input:focus{outline:1px solid var(--accent);background:#fff;border-radius:3px}
+.xbtn{border:0;background:none;color:var(--ink3);cursor:pointer;font-size:15px;padding:2px 5px;border-radius:4px}
+.xbtn:hover{background:#F7E6E4;color:var(--warn)}
+.rowbtns{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.btn{border:1px solid var(--rule);background:#fff;border-radius:6px;padding:7px 13px;font-size:13px;
+  cursor:pointer;font-family:inherit}
 .btn:hover{background:var(--rule2)}
-.btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn.primary{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600;padding:10px 22px}
 .btn.primary:hover{background:#000}
-.btn.danger{color:var(--warn)}
-.filedrop{border:1px dashed var(--rule);border-radius:8px;padding:12px;text-align:center;color:var(--ink3);font-size:12.5px}
+.btn.primary:disabled{opacity:.5;cursor:default}
+.budget{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px;margin-top:4px}
+.bx{border:1px solid var(--rule);border-radius:8px;padding:8px 10px;background:#FBFAF8}
+.bx small{display:block;font-size:10.5px;color:var(--ink3);margin-bottom:2px}
+.bx b{font-family:var(--mono);font-size:16px;font-weight:700}
+.bx b i{font-style:normal;font-size:10.5px;color:var(--ink3);font-weight:400;margin-left:2px}
 .thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.thumbs img{width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--rule)}
-.hint{font-size:11.5px;color:var(--ink3)}
+.thumbs figure{margin:0;width:72px}
+.thumbs img{width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--rule);display:block}
+.thumbs figcaption{font-size:9.5px;color:var(--ink3);text-align:center;margin-top:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tbl{width:100%;border-collapse:collapse;font-size:12.5px}
-.tbl th,.tbl td{border-bottom:1px solid var(--rule2);padding:6px;text-align:left;white-space:nowrap}
-.tbl td.wrap-cell{white-space:normal}
-.tbl a{color:var(--accent)}
+.tbl th,.tbl td{border-bottom:1px solid var(--rule2);padding:6px 7px;text-align:left;vertical-align:top}
+.tbl th{font-size:10.5px;color:var(--ink3);font-weight:600;white-space:nowrap}
+.tbl td.c{text-align:center;white-space:nowrap}
+.tbl .runno{font-family:var(--mono);font-size:11.5px;font-weight:600}
+.tbl .lot{font-family:var(--mono);font-size:10.5px;color:var(--ink3);display:block}
+.tbl img{width:38px;height:38px;object-fit:cover;border-radius:4px;border:1px solid var(--rule);margin-right:3px}
+.pill{display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:10px;font-weight:600}
+.pill.ok{background:#EEF6F1;color:var(--ok)} .pill.no{background:#FBEEEC;color:var(--warn)}
+.pill.mid{background:#FDF6E3;color:#8A6B1B}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(10px);
-  background:var(--ink);color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;
-  pointer-events:none;transition:.2s}
+  background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;
+  pointer-events:none;transition:.2s;z-index:60;max-width:90vw}
 .toast.show{opacity:1;transform:translateX(-50%)}
+.loading{padding:20px;text-align:center;color:var(--ink3);font-size:13px}
+@media (max-width:640px){ .wrap{padding:10px} .steps th,.steps td{padding:3px} }
 </style>
 </head>
 <body>
 
 <div class="topbar">
+  <div class="rule"></div>
   <span class="badge">GAUSS 소결</span>
   <h1>소결조건 기록</h1>
+  <span class="who" id="who"></span>
 </div>
 
 <div class="wrap">
 
+  <!-- 1. 기본 정보 -->
   <section class="card">
-    <header>1. 기본 정보</header>
+    <header><span class="n">01</span> 기본 정보</header>
     <div class="body">
       <div class="grid">
-        <div class="field"><label>런 번호 (비우면 자동생성)</label><input id="f_runId" placeholder="예: R-0001"></div>
+        <div class="field"><label>런 번호 (자동)</label><input id="f_runNo" placeholder="SR-260909-01"></div>
         <div class="field"><label>일자</label><input id="f_date" type="date"></div>
-        <div class="field"><label>작성자</label><input id="f_author"></div>
-        <div class="field"><label>소재</label>
-          <select id="f_material">
-            <option>Cu</option><option>316L</option><option>Ti</option><option>Nb</option><option>기타</option>
+        <div class="field"><label>잉크 Lot No</label>
+          <input id="f_lotNo" list="lotList" placeholder="GI-CU-260828-01">
+          <datalist id="lotList"></datalist>
+        </div>
+        <div class="field"><label>소재</label><select id="f_material"></select></div>
+        <div class="field"><label>샘플 수량</label><input id="f_qty" type="number" min="0"></div>
+        <div class="field"><label>세터 소재</label>
+          <select id="f_setter">
+            <option>알루미나</option><option>Mo 판</option><option>Ta foil</option>
+            <option>Y₂O₃ 코팅</option><option>기타</option>
           </select>
         </div>
-        <div class="field"><label>샘플 수량</label><input id="f_qty" type="number" min="0"></div>
+      </div>
+      <div class="alert bad" id="setterWarn">
+        ⚠ Ti / Nb는 알루미나 세터에 직접 접촉 금지입니다. Mo, Ta foil, Y₂O₃ 코팅을 사용하세요. (SOP §10)
       </div>
     </div>
   </section>
 
+  <!-- 2. 가스 / 퍼징 -->
   <section class="card">
-    <header>2. 가스 / 퍼징</header>
+    <header><span class="n">02</span> 가스 · 퍼징</header>
     <div class="body">
       <div class="grid">
         <div class="field"><label>가스 종류</label>
           <select id="f_gasType"><option>Ar</option><option>Ar-5%H₂</option><option>고순도 Ar</option></select>
         </div>
-        <div class="field"><label>1차압 시작 (bar)</label><input id="f_pStart" type="number" step="0.1"></div>
-        <div class="field"><label>1차압 종료 (bar)</label><input id="f_pEnd" type="number" step="0.1"></div>
-        <div class="field"><label>퍼징 사이클 횟수</label><input id="f_purgeCount" type="number" min="0"></div>
-        <div class="field"><label>백필 유량 (L/min)</label><input id="f_backfillFlow" type="number" step="0.1"></div>
-        <div class="field"><label>상시 유량 (L/min)</label><input id="f_steadyFlow" type="number" step="0.1"></div>
+        <div class="field"><label>봄베 용적 (L)</label><input id="f_cylinderVol" type="number" value="47"></div>
+        <div class="field"><label>1차압 시작 (bar)</label><input id="f_pStart" type="number" step="1" placeholder="150"></div>
+        <div class="field"><label>1차압 종료 (bar)</label><input id="f_pEnd" type="number" step="1"></div>
+        <div class="field"><label>퍼징 사이클 횟수</label><input id="f_purgeCount" type="number" min="0" value="3"></div>
+        <div class="field"><label>백필 유량 (L/min)</label><input id="f_backfillFlow" type="number" step="0.1" placeholder="5~10"></div>
+        <div class="field"><label>상시 유량 (L/min)</label><input id="f_steadyFlow" type="number" step="0.1" placeholder="0.5~1.0"></div>
       </div>
-      <div class="checkline"><input type="checkbox" id="f_baffle"><label for="f_baffle">백색 차단벽 삽입 확인</label></div>
-      <div class="checkline"><input type="checkbox" id="f_doorTight"><label for="f_doorTight">도어 대각 체결 확인</label></div>
+      <div class="alert bad" id="gasWarn"></div>
+      <div class="alert warn" id="purgeWarn"></div>
     </div>
   </section>
 
+  <!-- 3. 소결 프로그램 -->
   <section class="card">
-    <header>3. 소결 프로그램 (스텝별 승온/유지)</header>
+    <header><span class="n">03</span> 소결 프로그램 (Yudian AI-708 세그먼트)
+      <span class="sp"></span>
+      <span class="n" id="segHint">승온속도는 자동 계산됩니다</span>
+    </header>
     <div class="body">
-      <table class="steps" id="stepsTable">
-        <thead><tr><th style="width:50px">Step</th><th>목표온도(℃)</th><th>승온시간(분)</th><th>유지시간(분)</th><th>비고</th><th style="width:36px"></th></tr></thead>
+      <table class="steps">
+        <thead><tr>
+          <th style="width:34px">#</th><th style="width:100px">구간명</th>
+          <th style="width:88px">목표온도 ℃</th><th style="width:88px">승온시간 분</th>
+          <th style="width:74px">℃/min</th><th style="width:88px">유지시간 분</th>
+          <th>비고</th><th style="width:30px"></th>
+        </tr></thead>
         <tbody id="stepsBody"></tbody>
       </table>
       <div class="rowbtns">
-        <button class="btn" id="addStep">+ 스텝 추가</button>
-        <span class="hint" style="align-self:center">총 승온+유지 시간: <b id="calcTotal">0</b>분 · 최고온도: <b id="calcMax">-</b>℃</span>
+        <button class="btn" id="addStep" type="button">+ 스텝 추가</button>
+        <button class="btn" id="presetDebind" type="button">탈지 프리셋</button>
+        <button class="btn" id="clearSteps" type="button">비우기</button>
       </div>
+      <div class="note">냉각 구간도 스텝으로 넣어야 가스 예산이 정확해집니다 (SOP §6 — 냉각 중 가스 고갈이 과거 Cu 사고 원인).</div>
     </div>
   </section>
 
+  <!-- 4. 가스 예산 -->
   <section class="card">
-    <header>4. 장입 / 결과 사진</header>
+    <header><span class="n">04</span> 가스 예산 검산 <span class="sp"></span><span class="n">SOP §6</span></header>
     <div class="body">
-      <div class="field"><label>장입 사진</label>
-        <input type="file" id="f_loadPhotos" accept="image/*" multiple>
-        <div class="thumbs" id="loadThumbs"></div>
+      <div class="budget">
+        <div class="bx"><small>총 사이클 시간</small><b id="c_total">0<i>분</i></b></div>
+        <div class="bx"><small>최고 온도</small><b id="c_max">-<i>℃</i></b></div>
+        <div class="bx"><small>필요 가스량</small><b id="c_need">0<i>L</i></b></div>
+        <div class="bx"><small>사용 가능량</small><b id="c_avail">0<i>L</i></b></div>
+        <div class="bx"><small>여유율</small><b id="c_margin">-<i>배</i></b></div>
       </div>
-      <div class="field" style="margin-top:10px"><label>결과(회수 후) 사진</label>
-        <input type="file" id="f_resultPhotos" accept="image/*" multiple>
-        <div class="thumbs" id="resultThumbs"></div>
-      </div>
+      <div class="alert" id="budgetMsg"></div>
+      <div class="checkline"><input type="checkbox" id="f_night"><label for="f_night">야간 무인 운전 (여유율 2.0배 필요)</label></div>
     </div>
   </section>
 
+  <!-- 5. 안전 체크 -->
   <section class="card">
-    <header>5. 결과 / 특이사항</header>
+    <header><span class="n">05</span> 개시 전 필수 체크 <span class="sp"></span><span class="n">SOP §2·§3·§5</span></header>
+    <div class="body">
+      <div class="checkline"><input type="checkbox" id="f_baffle"><label for="f_baffle">백색 차단벽(단열 배플) 도어측 삽입 확인</label></div>
+      <div class="checkline"><input type="checkbox" id="f_doorTight"><label for="f_doorTight">도어 볼트 대각선 순서(1↔3, 2↔4) 2회전 체결</label></div>
+      <div class="checkline"><input type="checkbox" id="f_programSaved"><label for="f_programSaved">컨트롤러 −121 종료코드 · 소수점 · 저장(SAVE) 후 재확인</label></div>
+    </div>
+  </section>
+
+  <!-- 6. 사진 -->
+  <section class="card">
+    <header><span class="n">06</span> 사진</header>
     <div class="body">
       <div class="grid">
-        <div class="field"><label>표면 색상</label><input id="f_resultColor" placeholder="예: 은백색, 갈변 등"></div>
-        <div class="field"><label>변형 여부</label>
-          <select id="f_deformed"><option>없음</option><option>경미</option><option>있음</option></select>
+        <div class="field"><label>장입 사진 (도어 닫기 전)</label>
+          <input type="file" id="p_load" accept="image/*" multiple>
         </div>
-        <div class="field"><label>크랙 여부</label>
-          <select id="f_cracked"><option>없음</option><option>경미</option><option>있음</option></select>
+        <div class="field"><label>결과 사진 (회수 후 · 표면 색상)</label>
+          <input type="file" id="p_result" accept="image/*" multiple>
         </div>
-        <div class="field"><label>수축률 (%)</label><input id="f_shrinkage" type="number" step="0.1"></div>
+        <div class="field"><label>기타 (게이지 · 컨트롤러 화면 등)</label>
+          <input type="file" id="p_etc" accept="image/*" multiple>
+        </div>
       </div>
-      <div class="field" style="margin-top:10px"><label>특이사항 / 다음 런 개선점</label>
-        <textarea id="f_notes"></textarea>
+      <div class="thumbs" id="thumbs"></div>
+      <div class="note">사진은 구글드라이브 폴더에 자동 저장되고 시트에는 FileId만 기록됩니다. 휴대폰에서 열면 바로 촬영도 가능합니다.</div>
+    </div>
+  </section>
+
+  <!-- 7. 결과 -->
+  <section class="card">
+    <header><span class="n">07</span> 결과 · 특이사항</header>
+    <div class="body">
+      <div class="grid">
+        <div class="field"><label>표면 색상</label><input id="f_resultColor" placeholder="은백색 / 갈변 / 흑변 …"></div>
+        <div class="field"><label>변형</label>
+          <select id="f_deformed"><option>미기입</option><option>없음</option><option>경미</option><option>있음</option></select></div>
+        <div class="field"><label>크랙</label>
+          <select id="f_cracked"><option>미기입</option><option>없음</option><option>경미</option><option>있음</option></select></div>
+        <div class="field"><label>수축률 (%)</label><input id="f_shrinkage" type="number" step="0.1"></div>
+        <div class="field"><label>종합 판정</label>
+          <select id="f_success"><option>진행중</option><option>성공</option><option>부분성공</option><option>실패</option></select></div>
+      </div>
+      <div class="grid" style="margin-top:10px">
+        <div class="field" style="grid-column:1/-1"><label>특이사항</label><textarea id="f_notes"></textarea></div>
+        <div class="field" style="grid-column:1/-1"><label>다음 런 개선점</label><textarea id="f_improve"></textarea></div>
       </div>
     </div>
   </section>
 
-  <div class="rowbtns" style="margin-bottom:20px">
-    <button class="btn primary" id="submitBtn">런 기록 저장</button>
+  <div class="rowbtns" style="margin-bottom:22px">
+    <button class="btn primary" id="submitBtn" type="button">런 기록 저장</button>
+    <span class="note" id="saveHint"></span>
   </div>
 
+  <!-- 이력 -->
   <section class="card">
-    <header>최근 런 이력</header>
-    <div class="body" style="overflow:auto">
-      <table class="tbl" id="historyTable">
-        <thead><tr><th>런번호</th><th>일자</th><th>소재</th><th>최고온</th><th>결과색상</th><th>변형</th><th>크랙</th><th>사진</th></tr></thead>
-        <tbody id="historyBody"></tbody>
+    <header><span class="n">08</span> 최근 런 이력 <span class="sp"></span>
+      <button class="btn" id="refreshBtn" type="button" style="padding:3px 9px;font-size:11.5px">새로고침</button>
+    </header>
+    <div class="body" style="overflow:auto;padding:0">
+      <div class="loading" id="histLoading">불러오는 중…</div>
+      <table class="tbl" id="histTable" style="display:none">
+        <thead><tr>
+          <th>런번호 / Lot</th><th>일자</th><th>소재</th><th class="c">최고온</th><th class="c">총시간</th>
+          <th class="c">여유율</th><th>색상</th><th class="c">판정</th><th>사진</th><th></th>
+        </tr></thead>
+        <tbody id="histBody"></tbody>
       </table>
     </div>
   </section>
@@ -164,162 +261,336 @@ h1{font-size:18px;margin:0}
 <div class="toast" id="toast"></div>
 
 <script>
-let stepSeq = 0;
-function addStepRow(data){
-  stepSeq++;
-  const tr = document.createElement('tr');
-  tr.dataset.seq = stepSeq;
+var BOOT = null;
+var PHOTOS = [];   // {name, data, kind}
+
+function $(id){ return document.getElementById(id); }
+function toast(msg, ms){
+  var t = $('toast'); t.textContent = msg; t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, ms || 2600);
+}
+function num(id){ var v = parseFloat($(id).value); return isNaN(v) ? 0 : v; }
+
+/* ── 스텝 표 ─────────────────────────────────────── */
+function addStepRow(d){
+  var tr = document.createElement('tr');
   tr.innerHTML =
-    '<td class="stepno">'+stepSeq+'</td>'+
-    '<td><input class="s_temp" type="number" step="0.1"></td>'+
-    '<td><input class="s_ramp" type="number" step="0.1"></td>'+
-    '<td><input class="s_hold" type="number" step="0.1"></td>'+
-    '<td><input class="s_note" type="text"></td>'+
-    '<td><button class="btn danger" type="button" onclick="this.closest(\'tr\').remove();renumber();calc();">×</button></td>';
-  document.getElementById('stepsBody').appendChild(tr);
-  if(data){
-    tr.querySelector('.s_temp').value = data.targetTemp||'';
-    tr.querySelector('.s_ramp').value = data.rampMin||'';
-    tr.querySelector('.s_hold').value = data.holdMin||'';
-    tr.querySelector('.s_note').value = data.note||'';
+    '<td class="no"></td>'+
+    '<td><input class="s_label" placeholder="탈지/승온/유지/냉각"></td>'+
+    '<td><input class="s_temp" type="number" step="1"></td>'+
+    '<td><input class="s_ramp" type="number" step="1"></td>'+
+    '<td class="rate">-</td>'+
+    '<td><input class="s_hold" type="number" step="1"></td>'+
+    '<td><input class="s_note"></td>'+
+    '<td><button class="xbtn" type="button">×</button></td>';
+  $('stepsBody').appendChild(tr);
+  if(d){
+    tr.querySelector('.s_label').value = d.label || '';
+    tr.querySelector('.s_temp').value  = d.targetTemp || '';
+    tr.querySelector('.s_ramp').value  = d.rampMin || '';
+    tr.querySelector('.s_hold').value  = d.holdMin || '';
+    tr.querySelector('.s_note').value  = d.note || '';
   }
-  tr.querySelectorAll('input').forEach(function(inp){ inp.addEventListener('input', calc); });
+  tr.querySelectorAll('input').forEach(function(i){ i.addEventListener('input', calc); });
+  tr.querySelector('.xbtn').addEventListener('click', function(){ tr.remove(); calc(); });
   calc();
 }
-function renumber(){
-  document.querySelectorAll('#stepsBody tr').forEach(function(tr,i){
-    tr.querySelector('.stepno').textContent = i+1;
-  });
-}
+function stepRows(){ return Array.prototype.slice.call(document.querySelectorAll('#stepsBody tr')); }
+
+/* ── 계산: 승온속도 · 총시간 · 최고온 · 가스 예산 ── */
 function calc(){
-  let total=0, maxT=null;
-  document.querySelectorAll('#stepsBody tr').forEach(function(tr){
-    const ramp = parseFloat(tr.querySelector('.s_ramp').value)||0;
-    const hold = parseFloat(tr.querySelector('.s_hold').value)||0;
-    const temp = parseFloat(tr.querySelector('.s_temp').value);
-    total += ramp+hold;
-    if(!isNaN(temp)) maxT = (maxT===null)? temp : Math.max(maxT,temp);
+  var prevTemp = 25, total = 0, maxT = null;
+  stepRows().forEach(function(tr, i){
+    tr.querySelector('.no').textContent = i + 1;
+    var temp = parseFloat(tr.querySelector('.s_temp').value);
+    var ramp = parseFloat(tr.querySelector('.s_ramp').value) || 0;
+    var hold = parseFloat(tr.querySelector('.s_hold').value) || 0;
+    total += ramp + hold;
+    var rateCell = tr.querySelector('.rate');
+    if(!isNaN(temp) && ramp > 0){
+      var rate = (temp - prevTemp) / ramp;
+      rateCell.textContent = rate.toFixed(1);
+      rateCell.style.color = Math.abs(rate) > 20 ? 'var(--warn)' : '';
+    } else { rateCell.textContent = '-'; rateCell.style.color = ''; }
+    if(!isNaN(temp)){ maxT = (maxT === null) ? temp : Math.max(maxT, temp); prevTemp = temp; }
   });
-  document.getElementById('calcTotal').textContent = total;
-  document.getElementById('calcMax').textContent = maxT===null?'-':maxT;
+
+  $('c_total').innerHTML = total + '<i>분 · ' + (total/60).toFixed(1) + 'h</i>';
+  $('c_max').innerHTML = (maxT === null ? '-' : maxT) + '<i>℃</i>';
+
+  var steady = num('f_steadyFlow');
+  var need  = Math.round(steady * total);
+  var avail = Math.round(num('f_cylinderVol') * num('f_pStart') * 0.9);
+  var margin = need > 0 ? (avail / need) : 0;
+
+  $('c_need').innerHTML  = need + '<i>L</i>';
+  $('c_avail').innerHTML = avail + '<i>L</i>';
+  $('c_margin').innerHTML = (need > 0 && avail > 0 ? margin.toFixed(1) : '-') + '<i>배</i>';
+
+  var need_margin = $('f_night').checked ? (BOOT ? BOOT.nightMargin : 2.0) : (BOOT ? BOOT.minMargin : 1.5);
+  var box = $('budgetMsg');
+  box.className = 'alert show';
+  if(!need || !avail){
+    box.className = 'alert';
+  } else if(margin >= need_margin){
+    box.classList.add('good');
+    box.textContent = '✅ 여유율 ' + margin.toFixed(1) + '배 — 기준(' + need_margin + '배) 충족. 진행 가능합니다.';
+  } else {
+    box.classList.add('bad');
+    box.textContent = '❌ 여유율 ' + margin.toFixed(1) + '배 — 기준 ' + need_margin +
+      '배 미달. 예비 봄베를 대기시키거나 상시 유량을 ' +
+      (avail / need_margin / total).toFixed(2) + ' L/min 이하로 낮추세요. (냉각 중 가스 고갈 = 과거 Cu 산화 사고 패턴)';
+  }
+  checkMaterialRules();
 }
-document.getElementById('addStep').addEventListener('click', function(){ addStepRow(); });
 
-document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
-addStepRow(); addStepRow();
+/* ── 소재별 안전 규칙 (SOP §1·§10) ─────────────── */
+function currentMaterial(){
+  if(!BOOT) return null;
+  var code = $('f_material').value;
+  for(var i=0;i<BOOT.materials.length;i++) if(BOOT.materials[i].code === code) return BOOT.materials[i];
+  return null;
+}
+function checkMaterialRules(){
+  var m = currentMaterial();
+  var gas = $('f_gasType').value;
+  var gw = $('gasWarn'), pw = $('purgeWarn'), sw = $('setterWarn');
+  gw.className = 'alert bad'; pw.className = 'alert warn'; sw.className = 'alert bad';
+  if(!m) return;
 
-function readFiles(input){
-  const files = Array.from(input.files||[]);
-  return Promise.all(files.map(function(file){
-    return new Promise(function(resolve){
-      const reader = new FileReader();
-      reader.onload = function(){ resolve({name:file.name, data:reader.result}); };
+  if((m.code === 'TI' || m.code === 'NB') && gas.indexOf('H') >= 0){
+    gw.className = 'alert bad show';
+    gw.textContent = '❌ ' + m.name + '에 수소 함유 가스 사용 금지 — TiH₂ 생성 위험. 고순도 Ar만 사용하세요. (SOP §10)';
+  } else if(gas !== m.gas){
+    gw.className = 'alert warn show';
+    gw.textContent = '권장 가스는 ' + m.gas + ' 입니다. 다른 가스를 쓰는 이유를 특이사항에 남겨주세요.';
+  }
+
+  var pc = num('f_purgeCount');
+  if(pc && pc < m.minPurge){
+    pw.className = 'alert warn show';
+    pw.textContent = m.name + '는 퍼징 ' + m.minPurge + '회 이상 필요합니다. 현재 ' + pc + '회. (SOP §4-4)';
+  }
+
+  if((m.code === 'TI' || m.code === 'NB') && $('f_setter').value === '알루미나'){
+    sw.className = 'alert bad show';
+  }
+}
+
+/* ── 사진 ────────────────────────────────────────── */
+function wirePhotos(inputId, kind){
+  $(inputId).addEventListener('change', function(e){
+    var files = Array.prototype.slice.call(e.target.files || []);
+    files.forEach(function(file){
+      var reader = new FileReader();
+      reader.onload = function(){
+        PHOTOS.push({ name: file.name, data: reader.result, kind: kind });
+        renderThumbs();
+      };
       reader.readAsDataURL(file);
     });
-  }));
-}
-function wireThumbs(inputId, thumbId){
-  document.getElementById(inputId).addEventListener('change', function(e){
-    const box = document.getElementById(thumbId);
-    box.innerHTML='';
-    Array.from(e.target.files||[]).forEach(function(file){
-      const reader = new FileReader();
-      reader.onload = function(){ const img=document.createElement('img'); img.src=reader.result; box.appendChild(img); };
-      reader.readAsDataURL(file);
-    });
   });
 }
-wireThumbs('f_loadPhotos','loadThumbs');
-wireThumbs('f_resultPhotos','resultThumbs');
-
-function toast(msg){
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(function(){ t.classList.remove('show'); }, 2200);
+function renderThumbs(){
+  var box = $('thumbs'); box.innerHTML = '';
+  PHOTOS.forEach(function(p, i){
+    var fig = document.createElement('figure');
+    fig.innerHTML = '<img src="'+p.data+'"><figcaption>'+p.kind+'</figcaption>';
+    fig.querySelector('img').addEventListener('click', function(){
+      PHOTOS.splice(i,1); renderThumbs(); toast('사진 1장 제외');
+    });
+    fig.title = p.name + ' (클릭하면 제외)';
+    box.appendChild(fig);
+  });
 }
 
-document.getElementById('submitBtn').addEventListener('click', function(){
-  const btn = this;
-  btn.disabled = true; btn.textContent = '저장 중...';
-
-  Promise.all([
-    readFiles(document.getElementById('f_loadPhotos')),
-    readFiles(document.getElementById('f_resultPhotos'))
-  ]).then(function(res){
-    const steps = Array.from(document.querySelectorAll('#stepsBody tr')).map(function(tr,i){
+/* ── 저장 ────────────────────────────────────────── */
+function collect(){
+  var m = currentMaterial();
+  return {
+    runNo: $('f_runNo').value,
+    date: $('f_date').value,
+    lotNo: $('f_lotNo').value,
+    materialCode: $('f_material').value,
+    materialName: m ? m.name : '',
+    qty: $('f_qty').value,
+    setter: $('f_setter').value,
+    gasType: $('f_gasType').value,
+    cylinderVol: $('f_cylinderVol').value,
+    pStart: $('f_pStart').value,
+    pEnd: $('f_pEnd').value,
+    purgeCount: $('f_purgeCount').value,
+    backfillFlow: $('f_backfillFlow').value,
+    steadyFlow: $('f_steadyFlow').value,
+    maxTemp: $('c_max').textContent.replace(/[^0-9.\-]/g,''),
+    totalMinutes: $('c_total').textContent.split('분')[0].replace(/[^0-9.\-]/g,''),
+    gasNeed: $('c_need').textContent.replace(/[^0-9.\-]/g,''),
+    gasAvail: $('c_avail').textContent.replace(/[^0-9.\-]/g,''),
+    margin: $('c_margin').textContent.replace(/[^0-9.\-]/g,''),
+    baffle: $('f_baffle').checked,
+    doorTight: $('f_doorTight').checked,
+    programSaved: $('f_programSaved').checked,
+    resultColor: $('f_resultColor').value,
+    deformed: $('f_deformed').value,
+    cracked: $('f_cracked').value,
+    shrinkage: $('f_shrinkage').value,
+    success: $('f_success').value,
+    notes: $('f_notes').value,
+    improve: $('f_improve').value,
+    steps: stepRows().map(function(tr, i){
       return {
         stepNo: i+1,
+        label: tr.querySelector('.s_label').value,
         targetTemp: tr.querySelector('.s_temp').value,
         rampMin: tr.querySelector('.s_ramp').value,
+        rampRate: tr.querySelector('.rate').textContent,
         holdMin: tr.querySelector('.s_hold').value,
         note: tr.querySelector('.s_note').value
       };
-    });
-    const payload = {
-      runId: document.getElementById('f_runId').value,
-      date: document.getElementById('f_date').value,
-      author: document.getElementById('f_author').value,
-      material: document.getElementById('f_material').value,
-      qty: document.getElementById('f_qty').value,
-      gasType: document.getElementById('f_gasType').value,
-      pStart: document.getElementById('f_pStart').value,
-      pEnd: document.getElementById('f_pEnd').value,
-      purgeCount: document.getElementById('f_purgeCount').value,
-      backfillFlow: document.getElementById('f_backfillFlow').value,
-      steadyFlow: document.getElementById('f_steadyFlow').value,
-      baffle: document.getElementById('f_baffle').checked,
-      doorTight: document.getElementById('f_doorTight').checked,
-      maxTemp: document.getElementById('calcMax').textContent,
-      totalMinutes: document.getElementById('calcTotal').textContent,
-      resultColor: document.getElementById('f_resultColor').value,
-      deformed: document.getElementById('f_deformed').value,
-      cracked: document.getElementById('f_cracked').value,
-      shrinkage: document.getElementById('f_shrinkage').value,
-      notes: document.getElementById('f_notes').value,
-      steps: steps,
-      loadPhotos: res[0],
-      resultPhotos: res[1]
-    };
-    google.script.run
-      .withSuccessHandler(function(result){
-        toast('저장 완료: ' + result.runId);
-        btn.disabled=false; btn.textContent='런 기록 저장';
-        loadHistory();
-      })
-      .withFailureHandler(function(err){
-        toast('저장 실패: ' + err.message);
-        btn.disabled=false; btn.textContent='런 기록 저장';
-      })
-      .submitRun(payload);
-  });
+    }).filter(function(s){ return s.targetTemp || s.holdMin || s.label; }),
+    photos: PHOTOS
+  };
+}
+
+$('submitBtn').addEventListener('click', function(){
+  var btn = this;
+  btn.disabled = true; btn.textContent = '저장 중…';
+  $('saveHint').textContent = '사진 용량에 따라 수십 초 걸릴 수 있습니다.';
+  google.script.run
+    .withSuccessHandler(function(res){
+      toast('저장 완료 · ' + res.runNo + ' (사진 ' + res.photoCount + '장)', 4000);
+      btn.disabled = false; btn.textContent = '런 기록 저장';
+      $('saveHint').textContent = '';
+      PHOTOS = []; renderThumbs();
+      ['p_load','p_result','p_etc'].forEach(function(id){ $(id).value=''; });
+      $('f_runNo').value = res.nextRunNo;
+      loadHistory();
+    })
+    .withFailureHandler(function(err){
+      toast('저장 실패: ' + err.message, 6000);
+      btn.disabled = false; btn.textContent = '런 기록 저장';
+      $('saveHint').textContent = '';
+    })
+    .submitRun(collect());
 });
 
-function linkList(text){
-  if(!text) return '';
-  return text.split('\n').filter(Boolean).map(function(u,i){
-    return '<a href="'+u+'" target="_blank">사진'+(i+1)+'</a>';
-  }).join(' ');
+/* ── 이력 ────────────────────────────────────────── */
+function thumbUrl(fileId){ return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w120'; }
+function pill(v){
+  if(v === '성공') return '<span class="pill ok">성공</span>';
+  if(v === '실패') return '<span class="pill no">실패</span>';
+  if(v === '부분성공') return '<span class="pill mid">부분</span>';
+  return '<span class="pill mid">' + (v||'-') + '</span>';
 }
 function loadHistory(){
   google.script.run.withSuccessHandler(function(rows){
-    const body = document.getElementById('historyBody');
-    body.innerHTML='';
+    $('histLoading').style.display = 'none';
+    $('histTable').style.display = '';
+    var body = $('histBody'); body.innerHTML = '';
+    if(!rows.length){
+      body.innerHTML = '<tr><td colspan="10" style="color:var(--ink3);padding:16px">아직 기록이 없습니다.</td></tr>';
+      return;
+    }
     rows.forEach(function(r){
-      const tr = document.createElement('tr');
+      var tr = document.createElement('tr');
+      var photos = (r.photos||[]).slice(0,4).map(function(p){
+        return '<a href="https://drive.google.com/file/d/'+p.fileId+'/view" target="_blank">'+
+               '<img src="'+thumbUrl(p.fileId)+'" title="'+p.kind+'"></a>';
+      }).join('');
       tr.innerHTML =
-        '<td>'+(r['RunID']||'')+'</td>'+
+        '<td><span class="runno">'+(r['RunNo']||'')+'</span><span class="lot">'+(r['LotNo']||'')+'</span></td>'+
         '<td>'+(r['일자']||'')+'</td>'+
-        '<td>'+(r['소재']||'')+'</td>'+
-        '<td>'+(r['최고온도(℃)']||'')+'</td>'+
+        '<td>'+(r['소재코드']||'')+'</td>'+
+        '<td class="c">'+(r['최고온도(℃)']||'')+'</td>'+
+        '<td class="c">'+(r['총사이클시간(분)']||'')+'</td>'+
+        '<td class="c">'+(r['여유율']||'')+'</td>'+
         '<td>'+(r['결과색상']||'')+'</td>'+
-        '<td>'+(r['변형여부']||'')+'</td>'+
-        '<td>'+(r['크랙여부']||'')+'</td>'+
-        '<td class="wrap-cell">'+linkList(r['장입사진'])+' '+linkList(r['결과사진'])+'</td>';
+        '<td class="c">'+pill(r['소결성공여부'])+'</td>'+
+        '<td>'+photos+'</td>'+
+        '<td><button class="btn" type="button" style="padding:2px 8px;font-size:11px" '+
+            'onclick="copyRun(\''+r['RunNo']+'\')">불러오기</button></td>';
       body.appendChild(tr);
     });
-  }).getRecentRuns(20);
+  }).getRecentRuns(30);
 }
-loadHistory();
+
+function copyRun(runNo){
+  google.script.run.withSuccessHandler(function(r){
+    if(!r) return;
+    $('f_material').value = r['소재코드'] || '';
+    $('f_setter').value   = r['세터소재'] || '알루미나';
+    $('f_gasType').value  = r['가스종류'] || 'Ar';
+    $('f_cylinderVol').value = r['봄베용적(L)'] || 47;
+    $('f_purgeCount').value  = r['퍼징횟수'] || 3;
+    $('f_backfillFlow').value = r['백필유량(L/min)'] || '';
+    $('f_steadyFlow').value   = r['상시유량(L/min)'] || '';
+    $('stepsBody').innerHTML = '';
+    (r.steps||[]).forEach(function(s){ addStepRow(s); });
+    if(!(r.steps||[]).length) addStepRow();
+    calc();
+    window.scrollTo({top:0, behavior:'smooth'});
+    toast(runNo + ' 조건을 불러왔습니다. 일자·Lot·결과는 새로 입력하세요.', 4000);
+  }).loadRunForCopy(runNo);
+}
+
+/* ── 초기화 ──────────────────────────────────────── */
+function boot(){
+  google.script.run.withSuccessHandler(function(b){
+    BOOT = b;
+    $('who').textContent = b.user;
+    var sel = $('f_material');
+    b.materials.forEach(function(m){
+      var o = document.createElement('option');
+      o.value = m.code; o.textContent = m.code + ' · ' + m.name;
+      sel.appendChild(o);
+    });
+    var dl = $('lotList');
+    (b.knownLots||[]).forEach(function(l){
+      var o = document.createElement('option'); o.value = l; dl.appendChild(o);
+    });
+    $('f_runNo').value = b.suggestedRunNo;
+    $('f_cylinderVol').value = b.defaultCylinder;
+    onMaterialChange();
+    calc();
+    loadHistory();
+  }).withFailureHandler(function(err){
+    toast('초기화 실패: ' + err.message, 6000);
+  }).getBootstrap();
+}
+
+function onMaterialChange(){
+  var m = currentMaterial();
+  if(m){
+    $('f_gasType').value = m.gas;
+    $('f_purgeCount').value = m.minPurge;
+  }
+  checkMaterialRules();
+}
+
+$('f_date').value = new Date().toISOString().slice(0,10);
+$('addStep').addEventListener('click', function(){ addStepRow(); });
+$('clearSteps').addEventListener('click', function(){ $('stepsBody').innerHTML=''; addStepRow(); });
+$('presetDebind').addEventListener('click', function(){
+  $('stepsBody').innerHTML = '';
+  [{label:'탈지(디바인딩)', targetTemp:450, rampMin:180, holdMin:120, note:'유량 1~2 L/min로 상향'},
+   {label:'승온', targetTemp:900, rampMin:150, holdMin:30, note:''},
+   {label:'소결 유지', targetTemp:1050, rampMin:60, holdMin:120, note:''},
+   {label:'냉각', targetTemp:150, rampMin:480, holdMin:0, note:'150℃ 이하까지 가스 유지'}
+  ].forEach(addStepRow);
+  calc();
+  toast('탈지 프리셋을 넣었습니다. 소재에 맞게 수정하세요.', 3500);
+});
+$('f_material').addEventListener('change', onMaterialChange);
+['f_gasType','f_setter','f_purgeCount'].forEach(function(id){
+  $(id).addEventListener('change', checkMaterialRules);
+});
+['f_steadyFlow','f_cylinderVol','f_pStart','f_night'].forEach(function(id){
+  $(id).addEventListener('input', calc); $(id).addEventListener('change', calc);
+});
+$('refreshBtn').addEventListener('click', loadHistory);
+wirePhotos('p_load','장입'); wirePhotos('p_result','결과'); wirePhotos('p_etc','기타');
+addStepRow();
+boot();
 </script>
 </body>
 </html>
