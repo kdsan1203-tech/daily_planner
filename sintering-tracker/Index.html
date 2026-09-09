@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+:root{
+  --paper:#F6F5F2; --card:#fff; --ink:#1E1C19; --ink2:#4A4641; --ink3:#8B857D;
+  --rule:#E2DFD8; --rule2:#EEECE7; --accent:#1F4E9C; --warn:#C0261E; --ok:#3B7A5C;
+  --mono:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",Menlo,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI","Malgun Gothic","맑은 고딕",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
+h1{font-size:18px;margin:0}
+.topbar{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--rule);
+  padding:12px 16px;display:flex;align-items:center;gap:10px;z-index:10}
+.badge{background:#F2C744;color:#4A3B00;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px}
+.wrap{max-width:900px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:10px;margin-bottom:14px;overflow:hidden}
+.card>header{padding:9px 14px;border-bottom:1px solid var(--rule2);font-weight:700;font-size:13px;
+  letter-spacing:.02em;color:var(--accent)}
+.card .body{padding:12px 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:11px;color:var(--ink3);font-weight:600}
+.field input,.field select,.field textarea{border:1px solid var(--rule);border-radius:6px;padding:7px 8px;
+  font-family:inherit;font-size:13px;background:#fff}
+.field textarea{resize:vertical;min-height:60px}
+.checkline{display:flex;align-items:center;gap:8px;padding:4px 0}
+.checkline input{width:16px;height:16px}
+.steps{width:100%;border-collapse:collapse;margin-top:6px}
+.steps th,.steps td{border:1px solid var(--rule2);padding:5px;font-size:12.5px}
+.steps th{background:#FBFAF8;color:var(--ink3);font-weight:600}
+.steps input{width:100%;border:0;padding:3px;font-family:inherit;font-size:12.5px;background:transparent}
+.steps input:focus{outline:1px solid var(--accent);background:#fff}
+.rowbtns{display:flex;gap:6px;margin-top:8px}
+.btn{border:1px solid var(--rule);background:#fff;border-radius:6px;padding:7px 14px;font-size:13px;cursor:pointer}
+.btn:hover{background:var(--rule2)}
+.btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn.primary:hover{background:#000}
+.btn.danger{color:var(--warn)}
+.filedrop{border:1px dashed var(--rule);border-radius:8px;padding:12px;text-align:center;color:var(--ink3);font-size:12.5px}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.thumbs img{width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--rule)}
+.hint{font-size:11.5px;color:var(--ink3)}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th,.tbl td{border-bottom:1px solid var(--rule2);padding:6px;text-align:left;white-space:nowrap}
+.tbl td.wrap-cell{white-space:normal}
+.tbl a{color:var(--accent)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(10px);
+  background:var(--ink);color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;
+  pointer-events:none;transition:.2s}
+.toast.show{opacity:1;transform:translateX(-50%)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="badge">GAUSS 소결</span>
+  <h1>소결조건 기록</h1>
+</div>
+
+<div class="wrap">
+
+  <section class="card">
+    <header>1. 기본 정보</header>
+    <div class="body">
+      <div class="grid">
+        <div class="field"><label>런 번호 (비우면 자동생성)</label><input id="f_runId" placeholder="예: R-0001"></div>
+        <div class="field"><label>일자</label><input id="f_date" type="date"></div>
+        <div class="field"><label>작성자</label><input id="f_author"></div>
+        <div class="field"><label>소재</label>
+          <select id="f_material">
+            <option>Cu</option><option>316L</option><option>Ti</option><option>Nb</option><option>기타</option>
+          </select>
+        </div>
+        <div class="field"><label>샘플 수량</label><input id="f_qty" type="number" min="0"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <header>2. 가스 / 퍼징</header>
+    <div class="body">
+      <div class="grid">
+        <div class="field"><label>가스 종류</label>
+          <select id="f_gasType"><option>Ar</option><option>Ar-5%H₂</option><option>고순도 Ar</option></select>
+        </div>
+        <div class="field"><label>1차압 시작 (bar)</label><input id="f_pStart" type="number" step="0.1"></div>
+        <div class="field"><label>1차압 종료 (bar)</label><input id="f_pEnd" type="number" step="0.1"></div>
+        <div class="field"><label>퍼징 사이클 횟수</label><input id="f_purgeCount" type="number" min="0"></div>
+        <div class="field"><label>백필 유량 (L/min)</label><input id="f_backfillFlow" type="number" step="0.1"></div>
+        <div class="field"><label>상시 유량 (L/min)</label><input id="f_steadyFlow" type="number" step="0.1"></div>
+      </div>
+      <div class="checkline"><input type="checkbox" id="f_baffle"><label for="f_baffle">백색 차단벽 삽입 확인</label></div>
+      <div class="checkline"><input type="checkbox" id="f_doorTight"><label for="f_doorTight">도어 대각 체결 확인</label></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <header>3. 소결 프로그램 (스텝별 승온/유지)</header>
+    <div class="body">
+      <table class="steps" id="stepsTable">
+        <thead><tr><th style="width:50px">Step</th><th>목표온도(℃)</th><th>승온시간(분)</th><th>유지시간(분)</th><th>비고</th><th style="width:36px"></th></tr></thead>
+        <tbody id="stepsBody"></tbody>
+      </table>
+      <div class="rowbtns">
+        <button class="btn" id="addStep">+ 스텝 추가</button>
+        <span class="hint" style="align-self:center">총 승온+유지 시간: <b id="calcTotal">0</b>분 · 최고온도: <b id="calcMax">-</b>℃</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <header>4. 장입 / 결과 사진</header>
+    <div class="body">
+      <div class="field"><label>장입 사진</label>
+        <input type="file" id="f_loadPhotos" accept="image/*" multiple>
+        <div class="thumbs" id="loadThumbs"></div>
+      </div>
+      <div class="field" style="margin-top:10px"><label>결과(회수 후) 사진</label>
+        <input type="file" id="f_resultPhotos" accept="image/*" multiple>
+        <div class="thumbs" id="resultThumbs"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <header>5. 결과 / 특이사항</header>
+    <div class="body">
+      <div class="grid">
+        <div class="field"><label>표면 색상</label><input id="f_resultColor" placeholder="예: 은백색, 갈변 등"></div>
+        <div class="field"><label>변형 여부</label>
+          <select id="f_deformed"><option>없음</option><option>경미</option><option>있음</option></select>
+        </div>
+        <div class="field"><label>크랙 여부</label>
+          <select id="f_cracked"><option>없음</option><option>경미</option><option>있음</option></select>
+        </div>
+        <div class="field"><label>수축률 (%)</label><input id="f_shrinkage" type="number" step="0.1"></div>
+      </div>
+      <div class="field" style="margin-top:10px"><label>특이사항 / 다음 런 개선점</label>
+        <textarea id="f_notes"></textarea>
+      </div>
+    </div>
+  </section>
+
+  <div class="rowbtns" style="margin-bottom:20px">
+    <button class="btn primary" id="submitBtn">런 기록 저장</button>
+  </div>
+
+  <section class="card">
+    <header>최근 런 이력</header>
+    <div class="body" style="overflow:auto">
+      <table class="tbl" id="historyTable">
+        <thead><tr><th>런번호</th><th>일자</th><th>소재</th><th>최고온</th><th>결과색상</th><th>변형</th><th>크랙</th><th>사진</th></tr></thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let stepSeq = 0;
+function addStepRow(data){
+  stepSeq++;
+  const tr = document.createElement('tr');
+  tr.dataset.seq = stepSeq;
+  tr.innerHTML =
+    '<td class="stepno">'+stepSeq+'</td>'+
+    '<td><input class="s_temp" type="number" step="0.1"></td>'+
+    '<td><input class="s_ramp" type="number" step="0.1"></td>'+
+    '<td><input class="s_hold" type="number" step="0.1"></td>'+
+    '<td><input class="s_note" type="text"></td>'+
+    '<td><button class="btn danger" type="button" onclick="this.closest(\'tr\').remove();renumber();calc();">×</button></td>';
+  document.getElementById('stepsBody').appendChild(tr);
+  if(data){
+    tr.querySelector('.s_temp').value = data.targetTemp||'';
+    tr.querySelector('.s_ramp').value = data.rampMin||'';
+    tr.querySelector('.s_hold').value = data.holdMin||'';
+    tr.querySelector('.s_note').value = data.note||'';
+  }
+  tr.querySelectorAll('input').forEach(function(inp){ inp.addEventListener('input', calc); });
+  calc();
+}
+function renumber(){
+  document.querySelectorAll('#stepsBody tr').forEach(function(tr,i){
+    tr.querySelector('.stepno').textContent = i+1;
+  });
+}
+function calc(){
+  let total=0, maxT=null;
+  document.querySelectorAll('#stepsBody tr').forEach(function(tr){
+    const ramp = parseFloat(tr.querySelector('.s_ramp').value)||0;
+    const hold = parseFloat(tr.querySelector('.s_hold').value)||0;
+    const temp = parseFloat(tr.querySelector('.s_temp').value);
+    total += ramp+hold;
+    if(!isNaN(temp)) maxT = (maxT===null)? temp : Math.max(maxT,temp);
+  });
+  document.getElementById('calcTotal').textContent = total;
+  document.getElementById('calcMax').textContent = maxT===null?'-':maxT;
+}
+document.getElementById('addStep').addEventListener('click', function(){ addStepRow(); });
+
+document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
+addStepRow(); addStepRow();
+
+function readFiles(input){
+  const files = Array.from(input.files||[]);
+  return Promise.all(files.map(function(file){
+    return new Promise(function(resolve){
+      const reader = new FileReader();
+      reader.onload = function(){ resolve({name:file.name, data:reader.result}); };
+      reader.readAsDataURL(file);
+    });
+  }));
+}
+function wireThumbs(inputId, thumbId){
+  document.getElementById(inputId).addEventListener('change', function(e){
+    const box = document.getElementById(thumbId);
+    box.innerHTML='';
+    Array.from(e.target.files||[]).forEach(function(file){
+      const reader = new FileReader();
+      reader.onload = function(){ const img=document.createElement('img'); img.src=reader.result; box.appendChild(img); };
+      reader.readAsDataURL(file);
+    });
+  });
+}
+wireThumbs('f_loadPhotos','loadThumbs');
+wireThumbs('f_resultPhotos','resultThumbs');
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2200);
+}
+
+document.getElementById('submitBtn').addEventListener('click', function(){
+  const btn = this;
+  btn.disabled = true; btn.textContent = '저장 중...';
+
+  Promise.all([
+    readFiles(document.getElementById('f_loadPhotos')),
+    readFiles(document.getElementById('f_resultPhotos'))
+  ]).then(function(res){
+    const steps = Array.from(document.querySelectorAll('#stepsBody tr')).map(function(tr,i){
+      return {
+        stepNo: i+1,
+        targetTemp: tr.querySelector('.s_temp').value,
+        rampMin: tr.querySelector('.s_ramp').value,
+        holdMin: tr.querySelector('.s_hold').value,
+        note: tr.querySelector('.s_note').value
+      };
+    });
+    const payload = {
+      runId: document.getElementById('f_runId').value,
+      date: document.getElementById('f_date').value,
+      author: document.getElementById('f_author').value,
+      material: document.getElementById('f_material').value,
+      qty: document.getElementById('f_qty').value,
+      gasType: document.getElementById('f_gasType').value,
+      pStart: document.getElementById('f_pStart').value,
+      pEnd: document.getElementById('f_pEnd').value,
+      purgeCount: document.getElementById('f_purgeCount').value,
+      backfillFlow: document.getElementById('f_backfillFlow').value,
+      steadyFlow: document.getElementById('f_steadyFlow').value,
+      baffle: document.getElementById('f_baffle').checked,
+      doorTight: document.getElementById('f_doorTight').checked,
+      maxTemp: document.getElementById('calcMax').textContent,
+      totalMinutes: document.getElementById('calcTotal').textContent,
+      resultColor: document.getElementById('f_resultColor').value,
+      deformed: document.getElementById('f_deformed').value,
+      cracked: document.getElementById('f_cracked').value,
+      shrinkage: document.getElementById('f_shrinkage').value,
+      notes: document.getElementById('f_notes').value,
+      steps: steps,
+      loadPhotos: res[0],
+      resultPhotos: res[1]
+    };
+    google.script.run
+      .withSuccessHandler(function(result){
+        toast('저장 완료: ' + result.runId);
+        btn.disabled=false; btn.textContent='런 기록 저장';
+        loadHistory();
+      })
+      .withFailureHandler(function(err){
+        toast('저장 실패: ' + err.message);
+        btn.disabled=false; btn.textContent='런 기록 저장';
+      })
+      .submitRun(payload);
+  });
+});
+
+function linkList(text){
+  if(!text) return '';
+  return text.split('\n').filter(Boolean).map(function(u,i){
+    return '<a href="'+u+'" target="_blank">사진'+(i+1)+'</a>';
+  }).join(' ');
+}
+function loadHistory(){
+  google.script.run.withSuccessHandler(function(rows){
+    const body = document.getElementById('historyBody');
+    body.innerHTML='';
+    rows.forEach(function(r){
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>'+(r['RunID']||'')+'</td>'+
+        '<td>'+(r['일자']||'')+'</td>'+
+        '<td>'+(r['소재']||'')+'</td>'+
+        '<td>'+(r['최고온도(℃)']||'')+'</td>'+
+        '<td>'+(r['결과색상']||'')+'</td>'+
+        '<td>'+(r['변형여부']||'')+'</td>'+
+        '<td>'+(r['크랙여부']||'')+'</td>'+
+        '<td class="wrap-cell">'+linkList(r['장입사진'])+' '+linkList(r['결과사진'])+'</td>';
+      body.appendChild(tr);
+    });
+  }).getRecentRuns(20);
+}
+loadHistory();
+</script>
+</body>
+</html>
