@@ -1,596 +1,694 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
 <base target="_top">
 <meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
 :root{
-  --paper:#F6F5F2; --card:#fff; --ink:#1E1C19; --ink2:#4A4641; --ink3:#8B857D;
-  --rule:#E2DFD8; --rule2:#EEECE7; --accent:#1F4E9C; --warn:#C0261E; --ok:#3B7A5C; --mark:#F2C744;
-  --mono:ui-monospace,"Cascadia Mono",Consolas,"D2Coding",Menlo,monospace;
-  --sans:system-ui,-apple-system,"Segoe UI","Malgun Gothic","맑은 고딕",sans-serif;
+  --ground:#EDEFF1; --surface:#FFFFFF; --sunk:#F3F5F6; --well:#E4E8EB;
+  --ink:#12171B; --ink2:#4C575F; --ink3:#7E8B94; --rule:#D6DCE0; --rule2:#E7EBEE;
+  --ember:#CC5B12; --ember-soft:#FBEEE4; --cold:#3E5C75;
+  --ok:#14713D; --ok-soft:#E7F3EC; --bad:#A81E1E; --bad-soft:#FAEBEB; --warn:#8A6512; --warn-soft:#FBF3E0;
+  --sans:"IBM Plex Sans KR","Malgun Gothic","맑은 고딕",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,"D2Coding",monospace;
+  --shadow:0 1px 2px rgba(18,23,27,.05),0 6px 18px rgba(18,23,27,.05);
 }
+@media (prefers-color-scheme:dark){:root{
+  --ground:#0E1215; --surface:#161B20; --sunk:#1B2127; --well:#222A31;
+  --ink:#E6ECF1; --ink2:#A3B0BA; --ink3:#75838D; --rule:#2A333C; --rule2:#222A32;
+  --ember:#F0913A; --ember-soft:#2C1F14; --cold:#7FA5C4;
+  --ok:#4FBF7C; --ok-soft:#14251B; --bad:#FF6B6B; --bad-soft:#2A1618; --warn:#E8B44A; --warn-soft:#2A2213;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 18px rgba(0,0,0,.25);
+}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
-.topbar{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--rule);
-  padding:10px 16px;display:flex;align-items:center;gap:10px;z-index:20;flex-wrap:wrap}
-.topbar .rule{position:absolute;left:0;right:0;top:0;height:3px;background:var(--mark)}
-.badge{background:var(--mark);color:#4A3B00;font-size:11px;font-weight:700;padding:3px 9px;border-radius:4px}
-h1{font-size:17px;margin:0;font-weight:700}
-.who{margin-left:auto;font-size:12px;color:var(--ink3)}
-.wrap{max-width:960px;margin:0 auto;padding:16px}
-.card{background:var(--card);border:1px solid var(--rule);border-radius:10px;margin-bottom:14px;overflow:hidden}
-.card>header{padding:9px 14px;border-bottom:1px solid var(--rule2);font-weight:700;font-size:12.5px;
-  color:var(--accent);display:flex;align-items:center;gap:8px}
-.card>header .n{font-family:var(--mono);color:var(--ink3);font-size:11px}
-.card>header .sp{flex:1}
-.card .body{padding:12px 14px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px}
-.field{display:flex;flex-direction:column;gap:4px;min-width:0}
-.field label{font-size:11px;color:var(--ink3);font-weight:600}
-.field input,.field select,.field textarea{border:1px solid var(--rule);border-radius:6px;padding:7px 8px;
-  font-family:inherit;font-size:13px;background:#fff;width:100%}
-.field textarea{resize:vertical;min-height:58px}
-.field input:focus,.field select:focus,.field textarea:focus{outline:none;border-color:var(--accent);
-  box-shadow:0 0 0 3px rgba(31,78,156,.1)}
-.checkline{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px}
-.checkline input{width:17px;height:17px;flex:none}
-.note{font-size:11.5px;color:var(--ink3);margin-top:6px}
-.alert{border-radius:7px;padding:9px 11px;font-size:12.5px;margin-top:10px;display:none}
-.alert.show{display:block}
-.alert.bad{background:#FBEEEC;border:1px solid #E9C4BF;color:var(--warn);font-weight:600}
-.alert.good{background:#EEF6F1;border:1px solid #B9DBC8;color:var(--ok)}
-.alert.warn{background:#FDF6E3;border:1px solid #EBD9A5;color:#8A6B1B}
-table.steps{width:100%;border-collapse:collapse}
-.steps th,.steps td{border:1px solid var(--rule2);padding:4px 5px;font-size:12.5px}
-.steps th{background:#FBFAF8;color:var(--ink3);font-weight:600;font-size:11px}
-.steps td.no{text-align:center;font-family:var(--mono);color:var(--ink3);width:34px}
-.steps td.rate{text-align:right;font-family:var(--mono);color:var(--ink3);width:74px;font-size:11.5px}
-.steps input{width:100%;border:0;padding:3px;font-family:inherit;font-size:12.5px;background:transparent}
-.steps input:focus{outline:1px solid var(--accent);background:#fff;border-radius:3px}
-.xbtn{border:0;background:none;color:var(--ink3);cursor:pointer;font-size:15px;padding:2px 5px;border-radius:4px}
-.xbtn:hover{background:#F7E6E4;color:var(--warn)}
-.rowbtns{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
-.btn{border:1px solid var(--rule);background:#fff;border-radius:6px;padding:7px 13px;font-size:13px;
-  cursor:pointer;font-family:inherit}
-.btn:hover{background:var(--rule2)}
-.btn.primary{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:600;padding:10px 22px}
-.btn.primary:hover{background:#000}
-.btn.primary:disabled{opacity:.5;cursor:default}
-.budget{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px;margin-top:4px}
-.bx{border:1px solid var(--rule);border-radius:8px;padding:8px 10px;background:#FBFAF8}
-.bx small{display:block;font-size:10.5px;color:var(--ink3);margin-bottom:2px}
-.bx b{font-family:var(--mono);font-size:16px;font-weight:700}
-.bx b i{font-style:normal;font-size:10.5px;color:var(--ink3);font-weight:400;margin-left:2px}
-.thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.thumbs figure{margin:0;width:72px}
-.thumbs img{width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--rule);display:block}
-.thumbs figcaption{font-size:9.5px;color:var(--ink3);text-align:center;margin-top:2px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
-.tbl th,.tbl td{border-bottom:1px solid var(--rule2);padding:6px 7px;text-align:left;vertical-align:top}
-.tbl th{font-size:10.5px;color:var(--ink3);font-weight:600;white-space:nowrap}
-.tbl td.c{text-align:center;white-space:nowrap}
-.tbl .runno{font-family:var(--mono);font-size:11.5px;font-weight:600}
-.tbl .lot{font-family:var(--mono);font-size:10.5px;color:var(--ink3);display:block}
-.tbl img{width:38px;height:38px;object-fit:cover;border-radius:4px;border:1px solid var(--rule);margin-right:3px}
-.pill{display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:10px;font-weight:600}
-.pill.ok{background:#EEF6F1;color:var(--ok)} .pill.no{background:#FBEEEC;color:var(--warn)}
-.pill.mid{background:#FDF6E3;color:#8A6B1B}
-.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(10px);
-  background:var(--ink);color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;opacity:0;
-  pointer-events:none;transition:.2s;z-index:60;max-width:90vw}
+html,body{margin:0}
+body{background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--ember);outline-offset:1px}
+[hidden]{display:none!important}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* 상단 */
+.top{position:sticky;top:0;z-index:30;background:var(--surface);border-bottom:1px solid var(--rule)}
+.top .heat{height:3px;background:linear-gradient(90deg,var(--cold),#6B7E8C 25%,var(--ember) 75%)}
+.top .in{max-width:1180px;margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:16px;letter-spacing:-.01em;display:flex;align-items:baseline;gap:8px}
+.brand small{font-family:var(--mono);font-size:10.5px;color:var(--ink3);font-weight:500;letter-spacing:.06em}
+.sp{flex:1}
+.btn{border:1px solid var(--rule);background:var(--surface);border-radius:6px;padding:7px 13px;font-size:13px;white-space:nowrap}
+.btn:hover{background:var(--sunk)}
+.btn.pri{background:var(--ink);color:var(--surface);border-color:var(--ink);font-weight:600}
+.btn.pri:hover{opacity:.88}
+.btn.ember{background:var(--ember);border-color:var(--ember);color:#fff;font-weight:600}
+.btn.ghost{border-color:transparent;background:none;color:var(--ink2)}
+.btn.ghost:hover{background:var(--sunk)}
+.btn.danger{color:var(--bad)}
+.btn.sm{padding:4px 9px;font-size:12px}
+.btn:disabled{opacity:.5;cursor:default}
+
+.wrap{max-width:1180px;margin:0 auto;padding:18px}
+
+/* 목록 */
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.search{flex:1 1 220px;min-width:180px;border:1px solid var(--rule);background:var(--surface);border-radius:6px;padding:7px 10px}
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chip{border:1px solid var(--rule);background:var(--surface);border-radius:14px;padding:3px 10px;font-size:12px;color:var(--ink2)}
+.chip.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.summary{font-size:12.5px;color:var(--ink3);margin:0 0 10px}
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:9px;box-shadow:var(--shadow)}
+.scroll{overflow-x:auto}
+table.list{width:100%;border-collapse:collapse;font-size:13px}
+.list th{text-align:left;font-size:10.5px;letter-spacing:.06em;color:var(--ink3);font-weight:600;padding:9px 10px;border-bottom:1px solid var(--rule);white-space:nowrap;text-transform:uppercase;font-family:var(--mono)}
+.list td{padding:9px 10px;border-bottom:1px solid var(--rule2);vertical-align:middle}
+.list tr:last-child td{border-bottom:0}
+.list tbody tr{cursor:pointer}
+.list tbody tr:hover td{background:var(--sunk)}
+.bid{font-family:var(--mono);font-weight:600;font-size:12.5px}
+.sub{display:block;font-size:11.5px;color:var(--ink3)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;white-space:nowrap}
+.pill.run{background:var(--warn-soft);color:var(--warn)}
+.pill.done{background:var(--ok-soft);color:var(--ok)}
+.pill.fail{background:var(--bad-soft);color:var(--bad)}
+.g{display:inline-block;font-size:11px;padding:1px 6px;border-radius:4px;margin:1px 2px 1px 0;background:var(--well);color:var(--ink2)}
+.g.정상{background:var(--ok-soft);color:var(--ok)}
+.g.크랙,.g.붕괴{background:var(--bad-soft);color:var(--bad)}
+.g.휨{background:var(--warn-soft);color:var(--warn)}
+.thumbs{display:flex;gap:3px}
+.thumbs img{width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--rule);background:var(--well)}
+.empty{padding:40px 20px;text-align:center;color:var(--ink3)}
+.empty b{display:block;color:var(--ink);font-size:15px;margin-bottom:6px}
+
+/* 편집 */
+.ehead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.ehead h1{margin:0;font-size:21px;font-family:var(--mono);font-weight:600;letter-spacing:-.01em}
+.ehead .meta{font-size:12px;color:var(--ink3)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:14px;align-items:start}
+.sec{background:var(--surface);border:1px solid var(--rule);border-radius:9px;box-shadow:var(--shadow);margin-bottom:14px;min-width:0}
+.grid2 .sec{margin-bottom:0}
+.sec>h2{margin:0;padding:11px 15px;font-size:13.5px;font-weight:600;border-bottom:1px solid var(--rule2);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sec>h2 .hint{font-weight:400;font-size:12px;color:var(--ink3)}
+.sec>.bd{padding:13px 15px}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f label{font-size:11px;color:var(--ink3);font-weight:600}
+.f input,.f select,.f textarea{border:1px solid var(--rule);border-radius:6px;padding:7px 8px;background:var(--surface);width:100%;min-width:0}
+.f textarea{resize:vertical;min-height:64px}
+.f input:focus,.f select:focus,.f textarea:focus,td input:focus,td select:focus{outline:none;border-color:var(--ember);box-shadow:0 0 0 3px color-mix(in srgb,var(--ember) 15%,transparent)}
+.f.wide{grid-column:1/-1}
+.checks{display:flex;flex-direction:column;gap:6px;margin-top:12px;padding-top:12px;border-top:1px dashed var(--rule2)}
+.checks label{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer}
+.checks input{width:16px;height:16px;accent-color:var(--ok)}
+.alert{margin-top:10px;border-radius:6px;padding:8px 11px;font-size:12.5px}
+.alert.bad{background:var(--bad-soft);color:var(--bad);font-weight:600}
+.alert.warn{background:var(--warn-soft);color:var(--warn)}
+.alert.ok{background:var(--ok-soft);color:var(--ok)}
+
+.budget{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.bx{background:var(--sunk);border-radius:6px;padding:7px 9px}
+.bx small{display:block;font-size:10.5px;color:var(--ink3)}
+.bx b{font-family:var(--mono);font-size:15px;font-variant-numeric:tabular-nums}
+
+table.tb{width:100%;border-collapse:collapse;font-size:13px}
+.tb th{font-size:10.5px;color:var(--ink3);font-weight:600;text-align:left;padding:6px 5px;border-bottom:1px solid var(--rule);white-space:nowrap}
+.tb td{padding:3px 3px;border-bottom:1px solid var(--rule2);vertical-align:middle}
+.tb td input,.tb td select{width:100%;min-width:52px;border:1px solid transparent;border-radius:5px;padding:5px 6px;background:transparent}
+.tb td input:hover,.tb td select:hover{border-color:var(--rule)}
+.tb td input[type=number]{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.tb .calc{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;color:var(--ink2);padding:0 6px;white-space:nowrap;font-size:12.5px}
+.tb .calc.hot{color:var(--bad);font-weight:600}
+.tb .idx{font-family:var(--mono);color:var(--ink3);font-size:11px;text-align:center;width:26px}
+.tb .grp{text-align:center;border-left:1px solid var(--rule2)}
+.tb td.gl{border-left:1px solid var(--rule2)}
+.x{border:0;background:none;color:var(--ink3);font-size:16px;line-height:1;padding:3px 6px;border-radius:4px}
+.x:hover{background:var(--bad-soft);color:var(--bad)}
+.row-tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px}
+.row-tools select{border:1px solid var(--rule);border-radius:6px;padding:6px 8px;background:var(--surface);max-width:100%}
+.stat{font-size:12.5px;color:var(--ink2);margin-left:auto}
+.stat b{font-family:var(--mono)}
+.pname{min-width:150px}
+.pname small{display:block;font-family:var(--mono);font-size:10px;color:var(--ink3);padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}
+.pbtn{font-size:11.5px;padding:3px 8px;white-space:nowrap}
+
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:9px;margin-top:12px}
+.ph{position:relative;border-radius:7px;overflow:hidden;border:1px solid var(--rule);background:var(--well);aspect-ratio:1}
+.ph a{display:block;width:100%;height:100%}
+.ph img{width:100%;height:100%;object-fit:cover;display:block}
+.ph .file{display:flex;align-items:center;justify-content:center;height:100%;font-family:var(--mono);font-size:11px;color:var(--ink2);padding:8px;text-align:center;word-break:break-all}
+.ph .tag{position:absolute;left:5px;top:5px;background:rgba(18,23,27,.72);color:#fff;font-size:10.5px;padding:1px 6px;border-radius:4px}
+.ph .del{position:absolute;right:4px;top:4px;background:rgba(18,23,27,.6);color:#fff;border:0;border-radius:4px;width:22px;height:22px;font-size:13px;line-height:1;opacity:0;transition:opacity .15s}
+.ph:hover .del,.ph .del:focus{opacity:1}
+.upl{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.upl select{border:1px solid var(--rule);border-radius:6px;padding:7px 8px;background:var(--surface)}
+.progress{font-size:12.5px;color:var(--ember);font-weight:600}
+
+.savebar{position:sticky;bottom:0;z-index:25;background:var(--surface);border-top:1px solid var(--rule);box-shadow:0 -4px 14px rgba(18,23,27,.06)}
+.savebar .in{max-width:1180px;margin:0 auto;padding:10px 18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.savebar select{border:1px solid var(--rule);border-radius:6px;padding:7px 9px;background:var(--surface);font-weight:600}
+.dirty{font-size:12px;color:var(--ink3)}
+.dirty.on{color:var(--ember);font-weight:600}
+
+.toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%) translateY(8px);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:.2s;z-index:80;max-width:92vw}
 .toast.show{opacity:1;transform:translateX(-50%)}
-.loading{padding:20px;text-align:center;color:var(--ink3);font-size:13px}
-@media (max-width:640px){ .wrap{padding:10px} .steps th,.steps td{padding:3px} }
+.toast.bad{background:var(--bad);color:#fff}
+.loading{padding:60px 20px;text-align:center;color:var(--ink3)}
+@media (max-width:640px){.wrap{padding:12px}.budget{grid-template-columns:repeat(2,1fr)}.top .in{padding:9px 12px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <div class="rule"></div>
-  <span class="badge">GAUSS 소결</span>
-  <h1>소결조건 기록</h1>
-  <span class="who" id="who"></span>
-</div>
+<header class="top">
+  <div class="heat"></div>
+  <div class="in">
+    <div class="brand">GAUSS 소결 기록 <small id="sheetName"></small></div>
+    <span class="sp"></span>
+    <a class="btn ghost" id="sheetLink" target="_blank" rel="noopener" hidden>시트 열기</a>
+    <button class="btn ember" id="btnNew">+ 새 소결</button>
+  </div>
+</header>
 
-<div class="wrap">
+<div class="loading" id="boot">불러오는 중…</div>
 
-  <!-- 1. 기본 정보 -->
-  <section class="card">
-    <header><span class="n">01</span> 기본 정보</header>
-    <div class="body">
-      <div class="grid">
-        <div class="field"><label>런 번호 (자동)</label><input id="f_runNo" placeholder="SR-260909-01"></div>
-        <div class="field"><label>일자</label><input id="f_date" type="date"></div>
-        <div class="field"><label>잉크 Lot No</label>
-          <input id="f_lotNo" list="lotList" placeholder="GI-CU-260828-01">
-          <datalist id="lotList"></datalist>
-        </div>
-        <div class="field"><label>소재</label><select id="f_material"></select></div>
-        <div class="field"><label>샘플 수량</label><input id="f_qty" type="number" min="0"></div>
-        <div class="field"><label>세터 소재</label>
-          <select id="f_setter">
-            <option>알루미나</option><option>Mo 판</option><option>Ta foil</option>
-            <option>Y₂O₃ 코팅</option><option>기타</option>
-          </select>
-        </div>
-      </div>
-      <div class="alert bad" id="setterWarn">
-        ⚠ Ti / Nb는 알루미나 세터에 직접 접촉 금지입니다. Mo, Ta foil, Y₂O₃ 코팅을 사용하세요. (SOP §10)
-      </div>
-    </div>
-  </section>
+<!-- ═════ 목록 ═════ -->
+<main class="wrap" id="vList" hidden>
+  <div class="tools">
+    <input class="search" id="q" placeholder="배치번호 · Lot · 결과 메모로 찾기">
+    <div class="chips" id="matChips"></div>
+    <div class="chips" id="stChips"></div>
+  </div>
+  <p class="summary" id="sum"></p>
+  <div class="card scroll">
+    <table class="list">
+      <thead><tr>
+        <th>배치 · 일자</th><th>소재 · Lot</th><th>최고온도</th><th>분위기</th>
+        <th>부품 · 판정</th><th>수축률 XY / Z</th><th>사진</th><th>상태</th>
+      </tr></thead>
+      <tbody id="listBody"></tbody>
+    </table>
+    <div class="empty" id="listEmpty" hidden><b>아직 소결 기록이 없습니다</b>오른쪽 위 「+ 새 소결」로 첫 기록을 남겨보세요.</div>
+  </div>
+</main>
 
-  <!-- 2. 가스 / 퍼징 -->
-  <section class="card">
-    <header><span class="n">02</span> 가스 · 퍼징</header>
-    <div class="body">
-      <div class="grid">
-        <div class="field"><label>가스 종류</label>
-          <select id="f_gasType"><option>Ar</option><option>Ar-5%H₂</option><option>고순도 Ar</option></select>
-        </div>
-        <div class="field"><label>봄베 용적 (L)</label><input id="f_cylinderVol" type="number" value="47"></div>
-        <div class="field"><label>1차압 시작 (bar)</label><input id="f_pStart" type="number" step="1" placeholder="150"></div>
-        <div class="field"><label>1차압 종료 (bar)</label><input id="f_pEnd" type="number" step="1"></div>
-        <div class="field"><label>퍼징 사이클 횟수</label><input id="f_purgeCount" type="number" min="0" value="3"></div>
-        <div class="field"><label>백필 유량 (L/min)</label><input id="f_backfillFlow" type="number" step="0.1" placeholder="5~10"></div>
-        <div class="field"><label>상시 유량 (L/min)</label><input id="f_steadyFlow" type="number" step="0.1" placeholder="0.5~1.0"></div>
-      </div>
-      <div class="alert bad" id="gasWarn"></div>
-      <div class="alert warn" id="purgeWarn"></div>
-    </div>
-  </section>
-
-  <!-- 3. 소결 프로그램 -->
-  <section class="card">
-    <header><span class="n">03</span> 소결 프로그램 (Yudian AI-708 세그먼트)
-      <span class="sp"></span>
-      <span class="n" id="segHint">승온속도는 자동 계산됩니다</span>
-    </header>
-    <div class="body">
-      <table class="steps">
-        <thead><tr>
-          <th style="width:34px">#</th><th style="width:100px">구간명</th>
-          <th style="width:88px">목표온도 ℃</th><th style="width:88px">승온시간 분</th>
-          <th style="width:74px">℃/min</th><th style="width:88px">유지시간 분</th>
-          <th>비고</th><th style="width:30px"></th>
-        </tr></thead>
-        <tbody id="stepsBody"></tbody>
-      </table>
-      <div class="rowbtns">
-        <button class="btn" id="addStep" type="button">+ 스텝 추가</button>
-        <button class="btn" id="presetDebind" type="button">탈지 프리셋</button>
-        <button class="btn" id="clearSteps" type="button">비우기</button>
-      </div>
-      <div class="note">냉각 구간도 스텝으로 넣어야 가스 예산이 정확해집니다 (SOP §6 — 냉각 중 가스 고갈이 과거 Cu 사고 원인).</div>
-    </div>
-  </section>
-
-  <!-- 4. 가스 예산 -->
-  <section class="card">
-    <header><span class="n">04</span> 가스 예산 검산 <span class="sp"></span><span class="n">SOP §6</span></header>
-    <div class="body">
-      <div class="budget">
-        <div class="bx"><small>총 사이클 시간</small><b id="c_total">0<i>분</i></b></div>
-        <div class="bx"><small>최고 온도</small><b id="c_max">-<i>℃</i></b></div>
-        <div class="bx"><small>필요 가스량</small><b id="c_need">0<i>L</i></b></div>
-        <div class="bx"><small>사용 가능량</small><b id="c_avail">0<i>L</i></b></div>
-        <div class="bx"><small>여유율</small><b id="c_margin">-<i>배</i></b></div>
-      </div>
-      <div class="alert" id="budgetMsg"></div>
-      <div class="checkline"><input type="checkbox" id="f_night"><label for="f_night">야간 무인 운전 (여유율 2.0배 필요)</label></div>
-    </div>
-  </section>
-
-  <!-- 5. 안전 체크 -->
-  <section class="card">
-    <header><span class="n">05</span> 개시 전 필수 체크 <span class="sp"></span><span class="n">SOP §2·§3·§5</span></header>
-    <div class="body">
-      <div class="checkline"><input type="checkbox" id="f_baffle"><label for="f_baffle">백색 차단벽(단열 배플) 도어측 삽입 확인</label></div>
-      <div class="checkline"><input type="checkbox" id="f_doorTight"><label for="f_doorTight">도어 볼트 대각선 순서(1↔3, 2↔4) 2회전 체결</label></div>
-      <div class="checkline"><input type="checkbox" id="f_programSaved"><label for="f_programSaved">컨트롤러 −121 종료코드 · 소수점 · 저장(SAVE) 후 재확인</label></div>
-    </div>
-  </section>
-
-  <!-- 6. 사진 -->
-  <section class="card">
-    <header><span class="n">06</span> 사진</header>
-    <div class="body">
-      <div class="grid">
-        <div class="field"><label>장입 사진 (도어 닫기 전)</label>
-          <input type="file" id="p_load" accept="image/*" multiple>
-        </div>
-        <div class="field"><label>결과 사진 (회수 후 · 표면 색상)</label>
-          <input type="file" id="p_result" accept="image/*" multiple>
-        </div>
-        <div class="field"><label>기타 (게이지 · 컨트롤러 화면 등)</label>
-          <input type="file" id="p_etc" accept="image/*" multiple>
-        </div>
-      </div>
-      <div class="thumbs" id="thumbs"></div>
-      <div class="note">사진은 구글드라이브 폴더에 자동 저장되고 시트에는 FileId만 기록됩니다. 휴대폰에서 열면 바로 촬영도 가능합니다.</div>
-    </div>
-  </section>
-
-  <!-- 7. 결과 -->
-  <section class="card">
-    <header><span class="n">07</span> 결과 · 특이사항</header>
-    <div class="body">
-      <div class="grid">
-        <div class="field"><label>표면 색상</label><input id="f_resultColor" placeholder="은백색 / 갈변 / 흑변 …"></div>
-        <div class="field"><label>변형</label>
-          <select id="f_deformed"><option>미기입</option><option>없음</option><option>경미</option><option>있음</option></select></div>
-        <div class="field"><label>크랙</label>
-          <select id="f_cracked"><option>미기입</option><option>없음</option><option>경미</option><option>있음</option></select></div>
-        <div class="field"><label>수축률 (%)</label><input id="f_shrinkage" type="number" step="0.1"></div>
-        <div class="field"><label>종합 판정</label>
-          <select id="f_success"><option>진행중</option><option>성공</option><option>부분성공</option><option>실패</option></select></div>
-      </div>
-      <div class="grid" style="margin-top:10px">
-        <div class="field" style="grid-column:1/-1"><label>특이사항</label><textarea id="f_notes"></textarea></div>
-        <div class="field" style="grid-column:1/-1"><label>다음 런 개선점</label><textarea id="f_improve"></textarea></div>
-      </div>
-    </div>
-  </section>
-
-  <div class="rowbtns" style="margin-bottom:22px">
-    <button class="btn primary" id="submitBtn" type="button">런 기록 저장</button>
-    <span class="note" id="saveHint"></span>
+<!-- ═════ 편집 ═════ -->
+<main class="wrap" id="vEdit" hidden>
+  <div class="ehead">
+    <button class="btn ghost" id="btnBack">← 목록</button>
+    <h1 id="eTitle">새 소결</h1>
+    <span class="meta" id="eMeta"></span>
+    <span class="sp"></span>
+    <button class="btn sm danger" id="btnDelete" hidden>삭제</button>
   </div>
 
-  <!-- 이력 -->
-  <section class="card">
-    <header><span class="n">08</span> 최근 런 이력 <span class="sp"></span>
-      <button class="btn" id="refreshBtn" type="button" style="padding:3px 9px;font-size:11.5px">새로고침</button>
-    </header>
-    <div class="body" style="overflow:auto;padding:0">
-      <div class="loading" id="histLoading">불러오는 중…</div>
-      <table class="tbl" id="histTable" style="display:none">
-        <thead><tr>
-          <th>런번호 / Lot</th><th>일자</th><th>소재</th><th class="c">최고온</th><th class="c">총시간</th>
-          <th class="c">여유율</th><th>색상</th><th class="c">판정</th><th>사진</th><th></th>
-        </tr></thead>
-        <tbody id="histBody"></tbody>
-      </table>
+  <div class="grid2">
+    <section class="sec">
+      <h2>기본 정보</h2>
+      <div class="bd">
+        <div class="fields">
+          <div class="f"><label>일자</label><input type="date" data-f="date"></div>
+          <div class="f"><label>소결로</label><select data-f="furnace" id="selFurnace"></select></div>
+          <div class="f"><label>작업자</label><input data-f="operator" placeholder="이름"></div>
+          <div class="f"><label>소재</label><select data-f="material" id="selMaterial"></select></div>
+          <div class="f"><label>잉크 Lot No</label><input data-f="lot_no" list="lotList" placeholder="GI-CU-260828-01"><datalist id="lotList"></datalist></div>
+          <div class="f"><label>노 내 위치</label><input data-f="furnace_position" placeholder="예: 중앙 2단"></div>
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" data-f="check_baffle"> 백색 차단벽 삽입</label>
+          <label><input type="checkbox" data-f="check_door"> 도어 대각선 순서 체결</label>
+          <label><input type="checkbox" data-f="check_program"> 컨트롤러 −121 · 소수점 · 저장 확인</label>
+        </div>
+      </div>
+    </section>
+
+    <section class="sec">
+      <h2>분위기 · 가스 <span class="hint">SOP §4·§6</span></h2>
+      <div class="bd">
+        <div class="fields">
+          <div class="f"><label>가스</label>
+            <select data-f="atmosphere_gas"><option value="">선택</option><option>Ar</option><option>Ar-5%H₂</option><option>고순도 Ar</option><option>진공</option></select></div>
+          <div class="f"><label>상시 유량 (L/min)</label><input type="number" step="0.1" data-f="gas_flow_lpm" placeholder="0.5~1.0"></div>
+          <div class="f"><label>진공도</label><input data-f="vacuum" placeholder="예: 5 mbar"></div>
+          <div class="f"><label>퍼징 횟수</label><input type="number" data-f="purge_count"></div>
+          <div class="f"><label>봄베 용적 (L)</label><input type="number" data-f="cylinder_l"></div>
+          <div class="f"><label>1차압 시작 (bar)</label><input type="number" data-f="cyl_bar_start"></div>
+          <div class="f"><label>1차압 종료 (bar)</label><input type="number" data-f="cyl_bar_end"></div>
+        </div>
+        <div class="budget">
+          <div class="bx"><small>총 시간</small><b id="bTotal">-</b></div>
+          <div class="bx"><small>필요 가스</small><b id="bNeed">-</b></div>
+          <div class="bx"><small>사용 가능</small><b id="bAvail">-</b></div>
+          <div class="bx"><small>여유율</small><b id="bMargin">-</b></div>
+        </div>
+        <div id="gasAlerts"></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="sec" style="margin-top:14px">
+    <h2>소결 프로파일 <span class="hint">컨트롤러 세그먼트 순서대로 · 승온속도는 자동 계산</span></h2>
+    <div class="bd">
+      <div class="scroll">
+        <table class="tb">
+          <thead><tr><th class="idx">#</th><th style="width:150px">구간</th><th style="width:110px">목표온도 ℃</th><th style="width:110px">승온시간 분</th><th style="width:76px">℃/min</th><th style="width:110px">유지시간 분</th><th>비고</th><th style="width:34px"></th></tr></thead>
+          <tbody id="stepsBody"></tbody>
+        </table>
+      </div>
+      <div class="row-tools">
+        <button class="btn sm" id="addStep">+ 구간 추가</button>
+        <select id="copyFrom"><option value="">이전 소결 조건 불러오기…</option></select>
+        <span class="stat" id="profStat"></span>
+      </div>
     </div>
   </section>
 
+  <section class="sec">
+    <h2>장입 부품 <span class="hint">소결 전 치수를 넣어두고, 꺼낸 뒤 소결 후 치수를 채우면 수축률이 계산됩니다</span></h2>
+    <div class="bd">
+      <div class="scroll">
+        <table class="tb">
+          <thead>
+            <tr><th></th><th></th><th class="grp" colspan="4">소결 전 (mm · g)</th><th class="grp" colspan="4">소결 후 (mm · g)</th><th class="grp" colspan="3">수축 · 감량 %</th><th class="grp" colspan="4"></th></tr>
+            <tr><th class="idx">#</th><th>부품</th>
+              <th class="gl">X</th><th>Y</th><th>Z</th><th>무게</th>
+              <th class="gl">X</th><th>Y</th><th>Z</th><th>무게</th>
+              <th class="gl">XY</th><th>Z</th><th>무게</th>
+              <th class="gl">밀도</th><th>판정</th><th>사진</th><th></th></tr>
+          </thead>
+          <tbody id="partsBody"></tbody>
+        </table>
+      </div>
+      <div class="row-tools">
+        <select id="jobPick"><option value="">+ 출력 작업에서 부품 추가…</option></select>
+        <button class="btn sm" id="addPart">+ 직접 추가</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>사진 · 파일</h2>
+    <div class="bd">
+      <div class="upl">
+        <select id="photoKind"><option>장입</option><option>결과</option><option>컨트롤러</option><option>로그</option><option>기타</option></select>
+        <button class="btn" id="btnPhoto">사진 · 파일 올리기</button>
+        <span class="progress" id="upProg"></span>
+      </div>
+      <div class="gallery" id="gallery"></div>
+    </div>
+  </section>
+
+  <section class="sec">
+    <h2>결과 · 메모</h2>
+    <div class="bd">
+      <div class="fields">
+        <div class="f wide"><label>결과 요약</label><textarea data-f="result_summary" placeholder="표면 색상, 변형, 크랙, 전체 판단…"></textarea></div>
+        <div class="f wide"><label>메모 · 다음 소결 개선점</label><textarea data-f="notes"></textarea></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div class="savebar" id="saveBar" hidden>
+  <div class="in">
+    <select data-f="status" id="selStatus"><option>진행중</option><option>완료</option><option>실패</option></select>
+    <span class="dirty" id="dirtyFlag">저장됨</span>
+    <span class="sp"></span>
+    <button class="btn pri" id="btnSave">저장</button>
+  </div>
 </div>
 
+<input type="file" id="fileIn" multiple accept="image/*,.csv,.txt,.pdf,.xlsx" hidden>
 <div class="toast" id="toast"></div>
 
 <script>
-var BOOT = null;
-var PHOTOS = [];   // {name, data, kind}
+"use strict";
+const S = { boot: null, batches: [], cur: null, dirty: false, busy: false, filter: { q: '', mat: '', st: '' }, upTarget: null };
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const truthy = v => v === true || v === 'TRUE' || v === 'true';
+const fnum = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+const today = () => { const d = new Date(); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const thumb = id => 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=w400';
 
-function $(id){ return document.getElementById(id); }
-function toast(msg, ms){
-  var t = $('toast'); t.textContent = msg; t.classList.add('show');
-  setTimeout(function(){ t.classList.remove('show'); }, ms || 2600);
+function call(fn, ...args) {
+  return new Promise((res, rej) => google.script.run.withSuccessHandler(res).withFailureHandler(rej)[fn](...args));
 }
-function num(id){ var v = parseFloat($(id).value); return isNaN(v) ? 0 : v; }
-
-/* ── 스텝 표 ─────────────────────────────────────── */
-function addStepRow(d){
-  var tr = document.createElement('tr');
-  tr.innerHTML =
-    '<td class="no"></td>'+
-    '<td><input class="s_label" placeholder="탈지/승온/유지/냉각"></td>'+
-    '<td><input class="s_temp" type="number" step="1"></td>'+
-    '<td><input class="s_ramp" type="number" step="1"></td>'+
-    '<td class="rate">-</td>'+
-    '<td><input class="s_hold" type="number" step="1"></td>'+
-    '<td><input class="s_note"></td>'+
-    '<td><button class="xbtn" type="button">×</button></td>';
-  $('stepsBody').appendChild(tr);
-  if(d){
-    tr.querySelector('.s_label').value = d.label || '';
-    tr.querySelector('.s_temp').value  = d.targetTemp || '';
-    tr.querySelector('.s_ramp').value  = d.rampMin || '';
-    tr.querySelector('.s_hold').value  = d.holdMin || '';
-    tr.querySelector('.s_note').value  = d.note || '';
-  }
-  tr.querySelectorAll('input').forEach(function(i){ i.addEventListener('input', calc); });
-  tr.querySelector('.xbtn').addEventListener('click', function(){ tr.remove(); calc(); });
-  calc();
+function toast(msg, bad) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'toast show' + (bad ? ' bad' : '');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.className = 'toast', bad ? 6000 : 2800);
 }
-function stepRows(){ return Array.prototype.slice.call(document.querySelectorAll('#stepsBody tr')); }
+function operator() { try { return localStorage.getItem('gauss-sinter-op') || ''; } catch (e) { return ''; } }
+function rememberOperator(v) { try { localStorage.setItem('gauss-sinter-op', v); } catch (e) {} }
 
-/* ── 계산: 승온속도 · 총시간 · 최고온 · 가스 예산 ── */
-function calc(){
-  var prevTemp = 25, total = 0, maxT = null;
-  stepRows().forEach(function(tr, i){
-    tr.querySelector('.no').textContent = i + 1;
-    var temp = parseFloat(tr.querySelector('.s_temp').value);
-    var ramp = parseFloat(tr.querySelector('.s_ramp').value) || 0;
-    var hold = parseFloat(tr.querySelector('.s_hold').value) || 0;
-    total += ramp + hold;
-    var rateCell = tr.querySelector('.rate');
-    if(!isNaN(temp) && ramp > 0){
-      var rate = (temp - prevTemp) / ramp;
-      rateCell.textContent = rate.toFixed(1);
-      rateCell.style.color = Math.abs(rate) > 20 ? 'var(--warn)' : '';
-    } else { rateCell.textContent = '-'; rateCell.style.color = ''; }
-    if(!isNaN(temp)){ maxT = (maxT === null) ? temp : Math.max(maxT, temp); prevTemp = temp; }
-  });
+/* ── 부팅 ───────────────────────────────── */
+call('getBootstrap').then(b => {
+  S.boot = b; S.batches = b.batches || [];
+  $('#sheetName').textContent = b.sheetName || '';
+  if (b.sheetUrl) { $('#sheetLink').href = b.sheetUrl; $('#sheetLink').hidden = false; }
+  fillSelect($('#selFurnace'), b.lookups.furnace);
+  fillSelect($('#selMaterial'), b.lookups.material, '선택');
+  $('#lotList').innerHTML = (b.lots || []).map(l => '<option value="' + esc(l) + '">').join('');
+  $('#boot').hidden = true;
+  showList();
+}).catch(e => { $('#boot').textContent = '불러오지 못했습니다: ' + (e.message || e); });
 
-  $('c_total').innerHTML = total + '<i>분 · ' + (total/60).toFixed(1) + 'h</i>';
-  $('c_max').innerHTML = (maxT === null ? '-' : maxT) + '<i>℃</i>';
-
-  var steady = num('f_steadyFlow');
-  var need  = Math.round(steady * total);
-  var avail = Math.round(num('f_cylinderVol') * num('f_pStart') * 0.9);
-  var margin = need > 0 ? (avail / need) : 0;
-
-  $('c_need').innerHTML  = need + '<i>L</i>';
-  $('c_avail').innerHTML = avail + '<i>L</i>';
-  $('c_margin').innerHTML = (need > 0 && avail > 0 ? margin.toFixed(1) : '-') + '<i>배</i>';
-
-  var need_margin = $('f_night').checked ? (BOOT ? BOOT.nightMargin : 2.0) : (BOOT ? BOOT.minMargin : 1.5);
-  var box = $('budgetMsg');
-  box.className = 'alert show';
-  if(!need || !avail){
-    box.className = 'alert';
-  } else if(margin >= need_margin){
-    box.classList.add('good');
-    box.textContent = '✅ 여유율 ' + margin.toFixed(1) + '배 — 기준(' + need_margin + '배) 충족. 진행 가능합니다.';
-  } else {
-    box.classList.add('bad');
-    box.textContent = '❌ 여유율 ' + margin.toFixed(1) + '배 — 기준 ' + need_margin +
-      '배 미달. 예비 봄베를 대기시키거나 상시 유량을 ' +
-      (avail / need_margin / total).toFixed(2) + ' L/min 이하로 낮추세요. (냉각 중 가스 고갈 = 과거 Cu 산화 사고 패턴)';
-  }
-  checkMaterialRules();
+function fillSelect(sel, list, blank) {
+  sel.innerHTML = (blank ? '<option value="">' + esc(blank) + '</option>' : '') + list.map(v => '<option>' + esc(v) + '</option>').join('');
+}
+function ensureOption(sel, v) {
+  if (v && !Array.from(sel.options).some(o => o.value === v)) sel.insertAdjacentHTML('beforeend', '<option>' + esc(v) + '</option>');
 }
 
-/* ── 소재별 안전 규칙 (SOP §1·§10) ─────────────── */
-function currentMaterial(){
-  if(!BOOT) return null;
-  var code = $('f_material').value;
-  for(var i=0;i<BOOT.materials.length;i++) if(BOOT.materials[i].code === code) return BOOT.materials[i];
-  return null;
+/* ── 목록 ───────────────────────────────── */
+function showList() {
+  $('#vEdit').hidden = true; $('#saveBar').hidden = true; $('#vList').hidden = false; $('#btnNew').hidden = false;
+  S.cur = null; S.dirty = false;
+  renderChips(); renderList();
+  window.scrollTo(0, 0);
 }
-function checkMaterialRules(){
-  var m = currentMaterial();
-  var gas = $('f_gasType').value;
-  var gw = $('gasWarn'), pw = $('purgeWarn'), sw = $('setterWarn');
-  gw.className = 'alert bad'; pw.className = 'alert warn'; sw.className = 'alert bad';
-  if(!m) return;
+function refreshList() { return call('listBatches').then(l => { S.batches = l; if (!$('#vList').hidden) renderList(); }); }
 
-  if((m.code === 'TI' || m.code === 'NB') && gas.indexOf('H') >= 0){
-    gw.className = 'alert bad show';
-    gw.textContent = '❌ ' + m.name + '에 수소 함유 가스 사용 금지 — TiH₂ 생성 위험. 고순도 Ar만 사용하세요. (SOP §10)';
-  } else if(gas !== m.gas){
-    gw.className = 'alert warn show';
-    gw.textContent = '권장 가스는 ' + m.gas + ' 입니다. 다른 가스를 쓰는 이유를 특이사항에 남겨주세요.';
-  }
-
-  var pc = num('f_purgeCount');
-  if(pc && pc < m.minPurge){
-    pw.className = 'alert warn show';
-    pw.textContent = m.name + '는 퍼징 ' + m.minPurge + '회 이상 필요합니다. 현재 ' + pc + '회. (SOP §4-4)';
-  }
-
-  if((m.code === 'TI' || m.code === 'NB') && $('f_setter').value === '알루미나'){
-    sw.className = 'alert bad show';
-  }
+function renderChips() {
+  const mats = Array.from(new Set(S.batches.map(b => b.material).filter(Boolean)));
+  $('#matChips').innerHTML = ['', ...mats].map(m => '<button class="chip' + (S.filter.mat === m ? ' on' : '') + '" data-mat="' + esc(m) + '">' + (m ? esc(m) : '전체 소재') + '</button>').join('');
+  $('#stChips').innerHTML = ['', '진행중', '완료', '실패'].map(s => '<button class="chip' + (S.filter.st === s ? ' on' : '') + '" data-st="' + s + '">' + (s || '전체 상태') + '</button>').join('');
 }
-
-/* ── 사진 ────────────────────────────────────────── */
-function wirePhotos(inputId, kind){
-  $(inputId).addEventListener('change', function(e){
-    var files = Array.prototype.slice.call(e.target.files || []);
-    files.forEach(function(file){
-      var reader = new FileReader();
-      reader.onload = function(){
-        PHOTOS.push({ name: file.name, data: reader.result, kind: kind });
-        renderThumbs();
-      };
-      reader.readAsDataURL(file);
-    });
-  });
+function statusPill(s) {
+  const c = s === '완료' ? 'done' : s === '실패' ? 'fail' : 'run';
+  return '<span class="pill ' + c + '">' + esc(s || '진행중') + '</span>';
 }
-function renderThumbs(){
-  var box = $('thumbs'); box.innerHTML = '';
-  PHOTOS.forEach(function(p, i){
-    var fig = document.createElement('figure');
-    fig.innerHTML = '<img src="'+p.data+'"><figcaption>'+p.kind+'</figcaption>';
-    fig.querySelector('img').addEventListener('click', function(){
-      PHOTOS.splice(i,1); renderThumbs(); toast('사진 1장 제외');
-    });
-    fig.title = p.name + ' (클릭하면 제외)';
-    box.appendChild(fig);
-  });
+function renderList() {
+  const { q, mat, st } = S.filter;
+  const rows = S.batches.filter(b => (!mat || b.material === mat) && (!st || b.status === st) &&
+    (!q || [b.batch_id, b.lot_no, b.material, b.result, b.operator].join(' ').toLowerCase().includes(q)));
+  const run = S.batches.filter(b => b.status === '진행중').length;
+  $('#sum').textContent = '소결 기록 ' + S.batches.length + '건' + (run ? ' · 진행중 ' + run + '건' : '') + (rows.length !== S.batches.length ? ' · 표시 ' + rows.length + '건' : '');
+  $('#listEmpty').hidden = S.batches.length > 0;
+  $('#listBody').innerHTML = rows.map(b => {
+    const grades = Object.keys(b.grades || {}).map(g => '<span class="g ' + esc(g) + '">' + esc(g) + ' ' + b.grades[g] + '</span>').join('');
+    const hrs = b.total_min ? (b.total_min / 60).toFixed(1) + 'h' : '';
+    return '<tr data-id="' + esc(b.batch_id) + '">' +
+      '<td><span class="bid">' + esc(b.batch_id) + '</span><span class="sub">' + esc(b.date) + (b.operator ? ' · ' + esc(b.operator) : '') + '</span></td>' +
+      '<td>' + esc(b.material || '-') + '<span class="sub mono">' + esc(b.lot_no || '') + '</span></td>' +
+      '<td class="num">' + (b.peak !== '' && b.peak != null ? esc(b.peak) + '℃' : '-') + '<span class="sub">' + (b.peak_hold !== '' && b.peak_hold != null ? esc(b.peak_hold) + '분 유지' : '') + (hrs ? ' · 총 ' + hrs : '') + '</span></td>' +
+      '<td>' + esc(b.gas || '-') + '<span class="sub num">' + (b.flow !== '' && b.flow != null ? esc(b.flow) + ' L/min' : '') + '</span></td>' +
+      '<td>' + (b.partCount ? b.partCount + '개 ' : '-') + '<div>' + grades + '</div></td>' +
+      '<td class="num">' + (b.shrinkXY !== '' ? esc(b.shrinkXY) : '-') + ' / ' + (b.shrinkZ !== '' ? esc(b.shrinkZ) : '-') + '</td>' +
+      '<td><div class="thumbs">' + (b.thumbs || []).map(id => '<img loading="lazy" src="' + thumb(id) + '" alt="">').join('') + '</div></td>' +
+      '<td>' + statusPill(b.status) + '</td></tr>';
+  }).join('');
 }
+$('#q').addEventListener('input', e => { S.filter.q = e.target.value.trim().toLowerCase(); renderList(); });
+document.addEventListener('click', e => {
+  const m = e.target.closest('[data-mat]'); if (m) { S.filter.mat = m.dataset.mat; renderChips(); renderList(); }
+  const s = e.target.closest('[data-st]'); if (s) { S.filter.st = s.dataset.st; renderChips(); renderList(); }
+});
+$('#listBody').addEventListener('click', e => { const tr = e.target.closest('tr[data-id]'); if (tr) openBatch(tr.dataset.id); });
 
-/* ── 저장 ────────────────────────────────────────── */
-function collect(){
-  var m = currentMaterial();
+/* ── 편집 열기 ───────────────────────────── */
+function blankBatch() {
   return {
-    runNo: $('f_runNo').value,
-    date: $('f_date').value,
-    lotNo: $('f_lotNo').value,
-    materialCode: $('f_material').value,
-    materialName: m ? m.name : '',
-    qty: $('f_qty').value,
-    setter: $('f_setter').value,
-    gasType: $('f_gasType').value,
-    cylinderVol: $('f_cylinderVol').value,
-    pStart: $('f_pStart').value,
-    pEnd: $('f_pEnd').value,
-    purgeCount: $('f_purgeCount').value,
-    backfillFlow: $('f_backfillFlow').value,
-    steadyFlow: $('f_steadyFlow').value,
-    maxTemp: $('c_max').textContent.replace(/[^0-9.\-]/g,''),
-    totalMinutes: $('c_total').textContent.split('분')[0].replace(/[^0-9.\-]/g,''),
-    gasNeed: $('c_need').textContent.replace(/[^0-9.\-]/g,''),
-    gasAvail: $('c_avail').textContent.replace(/[^0-9.\-]/g,''),
-    margin: $('c_margin').textContent.replace(/[^0-9.\-]/g,''),
-    baffle: $('f_baffle').checked,
-    doorTight: $('f_doorTight').checked,
-    programSaved: $('f_programSaved').checked,
-    resultColor: $('f_resultColor').value,
-    deformed: $('f_deformed').value,
-    cracked: $('f_cracked').value,
-    shrinkage: $('f_shrinkage').value,
-    success: $('f_success').value,
-    notes: $('f_notes').value,
-    improve: $('f_improve').value,
-    steps: stepRows().map(function(tr, i){
-      return {
-        stepNo: i+1,
-        label: tr.querySelector('.s_label').value,
-        targetTemp: tr.querySelector('.s_temp').value,
-        rampMin: tr.querySelector('.s_ramp').value,
-        rampRate: tr.querySelector('.rate').textContent,
-        holdMin: tr.querySelector('.s_hold').value,
-        note: tr.querySelector('.s_note').value
-      };
-    }).filter(function(s){ return s.targetTemp || s.holdMin || s.label; }),
-    photos: PHOTOS
+    batch_id: '', date: today(), furnace: S.boot.lookups.furnace[0] || '', operator: operator(), material: '', lot_no: '',
+    furnace_position: '', atmosphere_gas: '', gas_flow_lpm: '', vacuum: '', purge_count: 3, cylinder_l: 47,
+    cyl_bar_start: '', cyl_bar_end: '', check_baffle: false, check_door: false, check_program: false,
+    result_summary: '', notes: '', status: '진행중',
+    steps: [{ label: '탈지', target: '', ramp: '', hold: '', note: '' }, { label: '소결', target: '', ramp: '', hold: '', note: '' }, { label: '냉각', target: '', ramp: '', hold: '', note: '' }]
   };
 }
+function newBatch() {
+  if (!confirmLeave()) return;
+  S.cur = { batch: blankBatch(), parts: [], photos: [], removed: [] };
+  S.dirty = false; showEdit();
+}
+function openBatch(id) {
+  $('#boot').hidden = false; $('#boot').textContent = id + ' 불러오는 중…'; $('#vList').hidden = true;
+  call('getBatch', id).then(r => {
+    $('#boot').hidden = true;
+    S.cur = { batch: r.batch, parts: r.parts, photos: r.photos, removed: [] };
+    S.dirty = false; showEdit();
+  }).catch(e => { $('#boot').hidden = true; $('#vList').hidden = false; toast(e.message || String(e), true); });
+}
+function showEdit() {
+  $('#vList').hidden = true; $('#vEdit').hidden = false; $('#saveBar').hidden = false; $('#btnNew').hidden = true;
+  renderEdit(); window.scrollTo(0, 0);
+}
+function renderEdit() {
+  const b = S.cur.batch;
+  $('#eTitle').textContent = b.batch_id || '새 소결';
+  $('#eMeta').textContent = b.batch_id ? [b.created_by && '등록 ' + b.created_by, b.updated_at && '수정 ' + b.updated_at].filter(Boolean).join(' · ') : '저장하면 SB-날짜-번호가 붙습니다';
+  $('#btnDelete').hidden = !b.batch_id;
+  ensureOption($('#selFurnace'), b.furnace); ensureOption($('#selMaterial'), b.material);
+  $$('[data-f]').forEach(el => {
+    const v = b[el.dataset.f];
+    if (el.type === 'checkbox') el.checked = truthy(v);
+    else { if (el.tagName === 'SELECT') ensureOption(el, v); el.value = v == null ? '' : v; }
+  });
+  $('#copyFrom').innerHTML = '<option value="">이전 소결 조건 불러오기…</option>' + S.batches.filter(x => x.batch_id !== b.batch_id)
+    .sort((x, y) => (y.material === b.material) - (x.material === b.material))
+    .map(x => '<option value="' + esc(x.batch_id) + '">' + esc(x.batch_id + ' · ' + (x.material || '') + ' · ' + (x.peak ? x.peak + '℃' : '') + (x.status === '완료' ? ' · 완료' : '')) + '</option>').join('');
+  renderJobPick(); renderSteps(); renderParts(); renderPhotos(); recalc(); setDirty(S.dirty);
+}
 
-$('submitBtn').addEventListener('click', function(){
-  var btn = this;
-  btn.disabled = true; btn.textContent = '저장 중…';
-  $('saveHint').textContent = '사진 용량에 따라 수십 초 걸릴 수 있습니다.';
-  google.script.run
-    .withSuccessHandler(function(res){
-      toast('저장 완료 · ' + res.runNo + ' (사진 ' + res.photoCount + '장)', 4000);
-      btn.disabled = false; btn.textContent = '런 기록 저장';
-      $('saveHint').textContent = '';
-      PHOTOS = []; renderThumbs();
-      ['p_load','p_result','p_etc'].forEach(function(id){ $(id).value=''; });
-      $('f_runNo').value = res.nextRunNo;
-      loadHistory();
-    })
-    .withFailureHandler(function(err){
-      toast('저장 실패: ' + err.message, 6000);
-      btn.disabled = false; btn.textContent = '런 기록 저장';
-      $('saveHint').textContent = '';
-    })
-    .submitRun(collect());
+/* ── 프로파일 ────────────────────────────── */
+function renderSteps() {
+  $('#stepsBody').innerHTML = (S.cur.batch.steps || []).map((s, i) =>
+    '<tr><td class="idx">' + (i + 1) + '</td>' +
+    '<td><input data-s="' + i + ':label" value="' + esc(s.label) + '" placeholder="구간"></td>' +
+    '<td><input type="number" data-s="' + i + ':target" value="' + esc(s.target) + '"></td>' +
+    '<td><input type="number" data-s="' + i + ':ramp" value="' + esc(s.ramp) + '"></td>' +
+    '<td class="calc" data-rate="' + i + '">-</td>' +
+    '<td><input type="number" data-s="' + i + ':hold" value="' + esc(s.hold) + '"></td>' +
+    '<td><input data-s="' + i + ':note" value="' + esc(s.note) + '"></td>' +
+    '<td><button class="x" data-delstep="' + i + '" title="구간 삭제">×</button></td></tr>').join('');
+}
+$('#addStep').addEventListener('click', () => { S.cur.batch.steps.push({ label: '', target: '', ramp: '', hold: '', note: '' }); renderSteps(); recalc(); setDirty(true); });
+$('#copyFrom').addEventListener('change', e => {
+  const id = e.target.value; if (!id) return;
+  call('getBatch', id).then(r => {
+    const b = S.cur.batch, src = r.batch;
+    b.steps = (src.steps || []).map(s => Object.assign({}, s));
+    ['atmosphere_gas', 'gas_flow_lpm', 'vacuum', 'purge_count', 'cylinder_l', 'furnace'].forEach(k => { if (src[k] !== '' && src[k] != null) b[k] = src[k]; });
+    if (!b.material) b.material = src.material;
+    setDirty(true); renderEdit(); toast(id + ' 조건을 가져왔습니다');
+  }).catch(err => toast(err.message || String(err), true));
+  e.target.value = '';
 });
 
-/* ── 이력 ────────────────────────────────────────── */
-function thumbUrl(fileId){ return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w120'; }
-function pill(v){
-  if(v === '성공') return '<span class="pill ok">성공</span>';
-  if(v === '실패') return '<span class="pill no">실패</span>';
-  if(v === '부분성공') return '<span class="pill mid">부분</span>';
-  return '<span class="pill mid">' + (v||'-') + '</span>';
+/* ── 부품 ────────────────────────────────── */
+function jobOf(id) { return (S.boot.jobs || []).find(j => j.job_id === id); }
+function renderJobPick() {
+  const mat = S.cur.batch.material;
+  const used = new Set(S.cur.parts.map(p => p.job_id).filter(Boolean));
+  const jobs = (S.boot.jobs || []).filter(j => !used.has(j.job_id));
+  const opt = j => '<option value="' + esc(j.job_id) + '">' + esc(j.at + ' · ' + j.name + (j.bbox[0] !== '' ? ' (' + j.bbox.join('×') + ')' : '') + (j.status === '소결완료' ? ' · 소결완료' : '')) + '</option>';
+  const same = jobs.filter(j => mat && j.material === mat), other = jobs.filter(j => !(mat && j.material === mat));
+  $('#jobPick').innerHTML = '<option value="">+ 출력 작업에서 부품 추가…</option>' +
+    (same.length ? '<optgroup label="' + esc(mat) + '">' + same.map(opt).join('') + '</optgroup>' : '') +
+    (other.length ? '<optgroup label="' + (same.length ? '다른 소재' : '최근 출력 작업') + '">' + other.map(opt).join('') + '</optgroup>' : '');
 }
-function loadHistory(){
-  google.script.run.withSuccessHandler(function(rows){
-    $('histLoading').style.display = 'none';
-    $('histTable').style.display = '';
-    var body = $('histBody'); body.innerHTML = '';
-    if(!rows.length){
-      body.innerHTML = '<tr><td colspan="10" style="color:var(--ink3);padding:16px">아직 기록이 없습니다.</td></tr>';
-      return;
+function renderParts() {
+  const grades = S.boot.lookups.grade;
+  const num = (i, k, ph) => '<td' + (/^(green_x|sint_x|density)/.test(k) ? ' class="gl"' : '') + '><input type="number" step="0.01" data-p="' + i + ':' + k + '" value="' + esc(S.cur.parts[i][k]) + '"' + (ph !== undefined && ph !== '' ? ' placeholder="' + esc(ph) + '"' : '') + '></td>';
+  $('#partsBody').innerHTML = S.cur.parts.map((p, i) => {
+    const job = p.job_id ? jobOf(p.job_id) : null;
+    const bb = job ? job.bbox : ['', '', ''];
+    const nPh = S.cur.photos.filter(x => x.part_id && x.part_id === p.part_id).length;
+    return '<tr><td class="idx">' + (i + 1) + '</td>' +
+      '<td class="pname"><input data-p="' + i + ':part_name" value="' + esc(p.part_name) + '" placeholder="부품 이름">' + (p.job_id ? '<small title="' + esc(p.job_id) + '">' + esc(p.job_id) + '</small>' : '') + '</td>' +
+      num(i, 'green_x_mm', bb[0]) + num(i, 'green_y_mm', bb[1]) + num(i, 'green_z_mm', bb[2]) + num(i, 'green_wt_g') +
+      num(i, 'sint_x_mm') + num(i, 'sint_y_mm') + num(i, 'sint_z_mm') + num(i, 'sint_wt_g') +
+      '<td class="calc gl" data-c="' + i + ':xy">-</td><td class="calc" data-c="' + i + ':z">-</td><td class="calc" data-c="' + i + ':w">-</td>' +
+      num(i, 'density_g_cm3') +
+      '<td><select data-p="' + i + ':grade"><option value="">-</option>' + grades.map(g => '<option' + (p.grade === g ? ' selected' : '') + '>' + esc(g) + '</option>').join('') + '</select></td>' +
+      '<td><button class="btn pbtn" data-pphoto="' + i + '">사진' + (nPh ? ' ' + nPh : '') + '</button></td>' +
+      '<td><button class="x" data-delpart="' + i + '" title="부품 빼기">×</button></td></tr>';
+  }).join('') || '<tr><td colspan="17" style="color:var(--ink3);padding:12px 6px;font-size:12.5px">아래에서 출력 작업을 고르면 이름과 모델 치수(흐린 글씨)가 들어갑니다. 실측값을 입력하세요.</td></tr>';
+}
+$('#jobPick').addEventListener('change', e => {
+  const j = jobOf(e.target.value); e.target.value = ''; if (!j) return;
+  S.cur.parts.push({ part_id: '', job_id: j.job_id, part_name: j.name });
+  if (!S.cur.batch.material && j.material) { S.cur.batch.material = j.material; ensureOption($('#selMaterial'), j.material); $('#selMaterial').value = j.material; }
+  renderJobPick(); renderParts(); recalc(); setDirty(true);
+});
+$('#addPart').addEventListener('click', () => { S.cur.parts.push({ part_id: '', job_id: '', part_name: '' }); renderParts(); recalc(); setDirty(true); });
+
+/* ── 계산 ────────────────────────────────── */
+function shrink(a, b) { const x = fnum(a), y = fnum(b); return x && y != null ? (x - y) / x * 100 : null; }
+function recalc() {
+  const b = S.cur.batch;
+  let prev = 25, total = 0, peak = null;
+  (b.steps || []).forEach((s, i) => {
+    const t = fnum(s.target), r = fnum(s.ramp) || 0, h = fnum(s.hold) || 0;
+    total += r + h;
+    const cell = document.querySelector('[data-rate="' + i + '"]');
+    if (cell) {
+      if (t != null && r > 0) { const rate = (t - prev) / r; cell.textContent = rate.toFixed(1); cell.classList.toggle('hot', Math.abs(rate) > 10); }
+      else { cell.textContent = '-'; cell.classList.remove('hot'); }
     }
-    rows.forEach(function(r){
-      var tr = document.createElement('tr');
-      var photos = (r.photos||[]).slice(0,4).map(function(p){
-        return '<a href="https://drive.google.com/file/d/'+p.fileId+'/view" target="_blank">'+
-               '<img src="'+thumbUrl(p.fileId)+'" title="'+p.kind+'"></a>';
-      }).join('');
-      tr.innerHTML =
-        '<td><span class="runno">'+(r['RunNo']||'')+'</span><span class="lot">'+(r['LotNo']||'')+'</span></td>'+
-        '<td>'+(r['일자']||'')+'</td>'+
-        '<td>'+(r['소재코드']||'')+'</td>'+
-        '<td class="c">'+(r['최고온도(℃)']||'')+'</td>'+
-        '<td class="c">'+(r['총사이클시간(분)']||'')+'</td>'+
-        '<td class="c">'+(r['여유율']||'')+'</td>'+
-        '<td>'+(r['결과색상']||'')+'</td>'+
-        '<td class="c">'+pill(r['소결성공여부'])+'</td>'+
-        '<td>'+photos+'</td>'+
-        '<td><button class="btn" type="button" style="padding:2px 8px;font-size:11px" '+
-            'onclick="copyRun(\''+r['RunNo']+'\')">불러오기</button></td>';
-      body.appendChild(tr);
-    });
-  }).getRecentRuns(30);
-}
+    if (t != null) { prev = t; peak = peak == null ? t : Math.max(peak, t); }
+  });
+  $('#profStat').innerHTML = '최고 <b>' + (peak == null ? '-' : peak + '℃') + '</b> · 총 <b>' + (total ? (total / 60).toFixed(1) + 'h' : '-') + '</b>';
 
-function copyRun(runNo){
-  google.script.run.withSuccessHandler(function(r){
-    if(!r) return;
-    $('f_material').value = r['소재코드'] || '';
-    $('f_setter').value   = r['세터소재'] || '알루미나';
-    $('f_gasType').value  = r['가스종류'] || 'Ar';
-    $('f_cylinderVol').value = r['봄베용적(L)'] || 47;
-    $('f_purgeCount').value  = r['퍼징횟수'] || 3;
-    $('f_backfillFlow').value = r['백필유량(L/min)'] || '';
-    $('f_steadyFlow').value   = r['상시유량(L/min)'] || '';
-    $('stepsBody').innerHTML = '';
-    (r.steps||[]).forEach(function(s){ addStepRow(s); });
-    if(!(r.steps||[]).length) addStepRow();
-    calc();
-    window.scrollTo({top:0, behavior:'smooth'});
-    toast(runNo + ' 조건을 불러왔습니다. 일자·Lot·결과는 새로 입력하세요.', 4000);
-  }).loadRunForCopy(runNo);
-}
+  const flow = fnum(b.gas_flow_lpm), cyl = fnum(b.cylinder_l), bar = fnum(b.cyl_bar_start);
+  const need = flow && total ? Math.round(flow * total) : null;
+  const avail = cyl && bar ? Math.round(cyl * bar * 0.9) : null;
+  const margin = need && avail ? avail / need : null;
+  b.gas_margin = margin ? Math.round(margin * 10) / 10 : '';
+  $('#bTotal').textContent = total ? (total / 60).toFixed(1) + ' h' : '-';
+  $('#bNeed').textContent = need ? need.toLocaleString() + ' L' : '-';
+  $('#bAvail').textContent = avail ? avail.toLocaleString() + ' L' : '-';
+  $('#bMargin').textContent = margin ? margin.toFixed(1) + ' 배' : '-';
 
-/* ── 초기화 ──────────────────────────────────────── */
-function boot(){
-  google.script.run.withSuccessHandler(function(b){
-    BOOT = b;
-    $('who').textContent = b.user;
-    var sel = $('f_material');
-    b.materials.forEach(function(m){
-      var o = document.createElement('option');
-      o.value = m.code; o.textContent = m.code + ' · ' + m.name;
-      sel.appendChild(o);
-    });
-    var dl = $('lotList');
-    (b.knownLots||[]).forEach(function(l){
-      var o = document.createElement('option'); o.value = l; dl.appendChild(o);
-    });
-    $('f_runNo').value = b.suggestedRunNo;
-    $('f_cylinderVol').value = b.defaultCylinder;
-    onMaterialChange();
-    calc();
-    loadHistory();
-  }).withFailureHandler(function(err){
-    toast('초기화 실패: ' + err.message, 6000);
-  }).getBootstrap();
-}
-
-function onMaterialChange(){
-  var m = currentMaterial();
-  if(m){
-    $('f_gasType').value = m.gas;
-    $('f_purgeCount').value = m.minPurge;
+  const alerts = [];
+  const gas = b.atmosphere_gas || '', mat = b.material || '';
+  if (/Titanium|Niobium|티타늄|니오븀/i.test(mat) && /H/.test(gas)) alerts.push(['bad', '티타늄·니오븀에 수소 함유 가스 사용 금지 — TiH₂ 생성 위험. 고순도 Ar만 쓰세요. (SOP §10)']);
+  if (/Titanium|Niobium|티타늄|니오븀/i.test(mat) && fnum(b.purge_count) != null && fnum(b.purge_count) < 3) alerts.push(['warn', '티타늄·니오븀은 퍼징 3회 이상이 필요합니다. (SOP §4-4)']);
+  if (margin != null) {
+    if (margin < 1.5) alerts.push(['bad', '가스 여유율 ' + margin.toFixed(1) + '배 — 1.5배 미만입니다. 예비 봄베를 대기시키거나 유량을 ' + (avail / 1.5 / total).toFixed(2) + ' L/min 이하로 낮추세요. 냉각 중 가스가 떨어지면 구리 산화 사고가 재현됩니다.']);
+    else if (margin < 2) alerts.push(['warn', '여유율 ' + margin.toFixed(1) + '배 — 주간 운전은 가능, 야간 무인 운전은 2.0배 이상 필요합니다.']);
+    else alerts.push(['ok', '여유율 ' + margin.toFixed(1) + '배 — 야간 무인 운전 기준까지 충족합니다.']);
   }
-  checkMaterialRules();
+  $('#gasAlerts').innerHTML = alerts.map(a => '<div class="alert ' + a[0] + '">' + esc(a[1]) + '</div>').join('');
+
+  S.cur.parts.forEach((p, i) => {
+    const xs = [shrink(p.green_x_mm, p.sint_x_mm), shrink(p.green_y_mm, p.sint_y_mm)].filter(v => v != null);
+    const set = (k, v) => { const c = document.querySelector('[data-c="' + i + ':' + k + '"]'); if (c) c.textContent = v == null ? '-' : v.toFixed(1); };
+    set('xy', xs.length ? xs.reduce((a, c) => a + c, 0) / xs.length : null);
+    set('z', shrink(p.green_z_mm, p.sint_z_mm));
+    set('w', shrink(p.green_wt_g, p.sint_wt_g));
+  });
 }
 
-$('f_date').value = new Date().toISOString().slice(0,10);
-$('addStep').addEventListener('click', function(){ addStepRow(); });
-$('clearSteps').addEventListener('click', function(){ $('stepsBody').innerHTML=''; addStepRow(); });
-$('presetDebind').addEventListener('click', function(){
-  $('stepsBody').innerHTML = '';
-  [{label:'탈지(디바인딩)', targetTemp:450, rampMin:180, holdMin:120, note:'유량 1~2 L/min로 상향'},
-   {label:'승온', targetTemp:900, rampMin:150, holdMin:30, note:''},
-   {label:'소결 유지', targetTemp:1050, rampMin:60, holdMin:120, note:''},
-   {label:'냉각', targetTemp:150, rampMin:480, holdMin:0, note:'150℃ 이하까지 가스 유지'}
-  ].forEach(addStepRow);
-  calc();
-  toast('탈지 프리셋을 넣었습니다. 소재에 맞게 수정하세요.', 3500);
+/* ── 입력 바인딩 ─────────────────────────── */
+function setDirty(v) {
+  S.dirty = v;
+  const f = $('#dirtyFlag'); f.textContent = v ? '저장하지 않은 변경 있음' : (S.cur && S.cur.batch.batch_id ? '저장됨' : '아직 저장 전');
+  f.className = 'dirty' + (v ? ' on' : '');
+}
+function onField(e) {
+  const el = e.target;
+  if (!S.cur) return;
+  if (el.dataset.f) {
+    S.cur.batch[el.dataset.f] = el.type === 'checkbox' ? el.checked : el.value;
+    if (el.dataset.f === 'operator') rememberOperator(el.value);
+    if (el.dataset.f === 'material') renderJobPick();
+  } else if (el.dataset.s) {
+    const [i, k] = el.dataset.s.split(':'); S.cur.batch.steps[+i][k] = el.value;
+  } else if (el.dataset.p) {
+    const [i, k] = el.dataset.p.split(':'); S.cur.parts[+i][k] = el.value;
+  } else return;
+  recalc(); setDirty(true);
+}
+document.addEventListener('input', onField);
+document.addEventListener('change', e => { if (e.target.type === 'checkbox' || e.target.tagName === 'SELECT') onField(e); });
+
+document.addEventListener('click', e => {
+  const t = e.target;
+  if (t.dataset.delstep != null) { S.cur.batch.steps.splice(+t.dataset.delstep, 1); renderSteps(); recalc(); setDirty(true); }
+  if (t.dataset.delpart != null) {
+    const i = +t.dataset.delpart, p = S.cur.parts[i];
+    if (!confirm((p.part_name || (i + 1) + '번 부품') + '을(를) 이 소결에서 뺄까요?')) return;
+    if (p.part_id) S.cur.removed.push(p.part_id);
+    S.cur.parts.splice(i, 1); renderJobPick(); renderParts(); recalc(); setDirty(true);
+  }
+  if (t.dataset.pphoto != null) { S.upTarget = { part: +t.dataset.pphoto, kind: '결과' }; $('#fileIn').click(); }
+  if (t.dataset.delphoto) {
+    if (!confirm('이 사진을 목록에서 뺄까요? (드라이브 파일은 남아 있습니다)')) return;
+    const id = t.dataset.delphoto;
+    call('deletePhoto', id, S.cur.batch.operator || operator()).then(() => {
+      S.cur.photos = S.cur.photos.filter(p => p.file_id !== id); renderPhotos(); renderParts(); recalc();
+    }).catch(err => toast(err.message || String(err), true));
+  }
 });
-$('f_material').addEventListener('change', onMaterialChange);
-['f_gasType','f_setter','f_purgeCount'].forEach(function(id){
-  $(id).addEventListener('change', checkMaterialRules);
+
+/* ── 저장 · 삭제 ─────────────────────────── */
+function save() {
+  if (S.busy) return Promise.reject(new Error('처리 중입니다'));
+  const b = S.cur.batch;
+  if (!b.date) { toast('일자를 넣어주세요', true); return Promise.reject(new Error('no date')); }
+  S.busy = true; $('#btnSave').disabled = true; $('#btnSave').textContent = '저장 중…';
+  const payload = { batch: b, parts: S.cur.parts.map(p => Object.assign({}, p)), removedPartIds: S.cur.removed };
+  return call('saveBatch', payload).then(r => {
+    const photos = S.cur.photos;
+    S.cur = { batch: r.batch, parts: r.parts, photos: r.photos || photos, removed: [] };
+    S.dirty = false; renderEdit();
+    toast(r.batch.batch_id + ' 저장했습니다');
+    refreshList();
+    return r;
+  }).catch(e => { toast('저장하지 못했습니다: ' + (e.message || e), true); throw e; })
+    .finally(() => { S.busy = false; $('#btnSave').disabled = false; $('#btnSave').textContent = '저장'; });
+}
+$('#btnSave').addEventListener('click', () => save().catch(() => {}));
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 's' && S.cur) { e.preventDefault(); save().catch(() => {}); } });
+
+$('#btnDelete').addEventListener('click', () => {
+  const id = S.cur.batch.batch_id;
+  if (!confirm(id + ' 기록을 삭제할까요?\n시트에서는 deleted 표시만 되고 지워지지 않습니다.')) return;
+  call('deleteBatch', id, S.cur.batch.operator || operator()).then(() => { toast(id + ' 삭제했습니다'); S.dirty = false; return refreshList(); })
+    .then(showList).catch(e => toast(e.message || String(e), true));
 });
-['f_steadyFlow','f_cylinderVol','f_pStart','f_night'].forEach(function(id){
-  $(id).addEventListener('input', calc); $(id).addEventListener('change', calc);
+function confirmLeave() { return !S.dirty || confirm('저장하지 않은 변경이 있습니다. 버리고 나갈까요?'); }
+$('#btnBack').addEventListener('click', () => { if (confirmLeave()) showList(); });
+$('#btnNew').addEventListener('click', newBatch);
+window.addEventListener('beforeunload', e => { if (S.dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+/* ── 사진 ────────────────────────────────── */
+function renderPhotos() {
+  const partName = id => { const p = S.cur.parts.find(x => x.part_id === id); return p ? (p.part_name || id.split('-').pop()) : ''; };
+  $('#gallery').innerHTML = S.cur.photos.map(p => {
+    const isImg = !/\.(csv|txt|pdf|xlsx)$/i.test(p.name || '');
+    return '<div class="ph"><a href="' + esc(p.url) + '" target="_blank" rel="noopener">' +
+      (isImg ? '<img loading="lazy" src="' + thumb(p.file_id) + '" alt="' + esc(p.name) + '">' : '<span class="file">' + esc(p.name) + '</span>') + '</a>' +
+      '<span class="tag">' + esc(p.kind) + (p.part_id ? ' · ' + esc(partName(p.part_id)) : '') + '</span>' +
+      '<button class="del" data-delphoto="' + esc(p.file_id) + '" title="빼기">×</button></div>';
+  }).join('') || '<div style="grid-column:1/-1;color:var(--ink3);font-size:12.5px">장입 직후 한 장, 꺼낸 뒤 한 장. 휴대폰으로 열면 바로 촬영해서 올릴 수 있습니다.</div>';
+}
+$('#btnPhoto').addEventListener('click', () => { S.upTarget = { part: null, kind: $('#photoKind').value }; $('#fileIn').click(); });
+$('#fileIn').addEventListener('change', e => {
+  const files = Array.from(e.target.files || []); e.target.value = '';
+  if (files.length && S.upTarget) upload(files, S.upTarget);
 });
-$('refreshBtn').addEventListener('click', loadHistory);
-wirePhotos('p_load','장입'); wirePhotos('p_result','결과'); wirePhotos('p_etc','기타');
-addStepRow();
-boot();
+
+function prepare(file) {
+  return new Promise((resolve, reject) => {
+    if (file.size > 30 * 1024 * 1024) return reject(new Error(file.name + ' 은(는) 30MB를 넘어 올릴 수 없습니다'));
+    const rd = new FileReader();
+    rd.onerror = () => reject(rd.error);
+    rd.onload = () => {
+      const url = rd.result, raw = { mime: file.type || 'application/octet-stream', data: url.split(',')[1], name: file.name };
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return resolve(raw);
+      const img = new Image();
+      img.onerror = () => resolve(raw);
+      img.onload = () => {
+        const s = Math.min(1, 1800 / Math.max(img.width, img.height));
+        const c = document.createElement('canvas'); c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve({ mime: 'image/jpeg', data: c.toDataURL('image/jpeg', 0.86).split(',')[1], name: file.name.replace(/\.[^.]+$/, '') + '.jpg' });
+      };
+      img.src = url;
+    };
+    rd.readAsDataURL(file);
+  });
+}
+async function upload(files, target) {
+  const prog = $('#upProg');
+  try {
+    if (!S.cur.batch.batch_id || S.dirty) { prog.textContent = '먼저 저장하는 중…'; await save(); }
+    const part = target.part != null ? S.cur.parts[target.part] : null;
+    const partId = part ? part.part_id : '';
+    for (let i = 0; i < files.length; i++) {
+      prog.textContent = '올리는 중 ' + (i + 1) + ' / ' + files.length;
+      const f = await prepare(files[i]);
+      const r = await call('uploadFile', S.cur.batch.batch_id, partId, target.kind, f.name, f.mime, f.data, S.cur.batch.operator || operator());
+      S.cur.photos.push(r); renderPhotos(); renderParts(); recalc();
+    }
+    prog.textContent = ''; toast(files.length + '개 올렸습니다'); refreshList();
+  } catch (e) {
+    prog.textContent = ''; toast('올리지 못했습니다: ' + (e.message || e), true);
+  }
+}
 </script>
 </body>
 </html>

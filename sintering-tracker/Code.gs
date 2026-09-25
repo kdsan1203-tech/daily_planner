@@ -1,387 +1,476 @@
 /**
- * GAUSS 소결조건 기록 시스템
- * 구글시트 + Apps Script 웹앱
+ * GAUSS 소결 기록 — Apps Script 웹앱
  *
- * 「가우스 잉크 Lot No 관리 시스템」과 같은 구조로 설계됨:
- *   Runs / Steps / Images / ActivityLog / Config 시트, 소프트 삭제, 작성자 자동 기록
- *   소결런 번호 형식: SR-YYMMDD-NN   (잉크 Lot 형식 GI-CU-260828-01 과 대응)
+ * 「소결 데이터」 시트의 기존 구조를 그대로 사용합니다.
+ *   Jobs          : 슬라이서가 자동 등록하는 출력 작업 (읽기 + 소결완료 표시만)
+ *   SinterBatches : 소결 1회 = 1행 (기존 18개 열 + 뒤에 추가 열)
+ *   Parts         : 소결에 들어간 부품별 치수·무게·수축률·판정
+ *   Photos        : 사진 목록 (이 프로그램이 새로 만듦)
+ *   ActivityLog   : 누가 언제 무엇을 했는지
+ *   Lookups       : 소재·판정·소결로 목록 (기존 시트에서 읽음)
  *
- * 설치 방법은 같은 폴더의 README.md 참고.
+ * SHEET_ID 를 비워두면 이 스크립트가 붙어 있는 시트에 같은 구조를 만들어 씁니다.
  */
 
-const SS_NAME_SUFFIX = 'GAUSS 소결조건 기록';
-const RUNS_SHEET   = 'Runs';
-const STEPS_SHEET  = 'Steps';
-const IMAGES_SHEET = 'Images';
-const LOG_SHEET    = 'ActivityLog';
-const CONFIG_SHEET = 'Config';
+const SHEET_ID = '1XXW7sJW40M_DUqXltIbhVG39lDVO3asyC3wqLaPe7Rw';   // 소결 데이터
+const LOT_SHEET_ID = '17uOLhQ3eiAFCP4VEKZXTwGm2t_bXOinfv4robQ1SBU0'; // 가우스 잉크 Lot No 관리 시스템
+const PHOTO_FOLDER = 'GAUSS 소결 사진';
 
-const RUNS_HEADER = [
-  'RunNo','일자','LotNo','소재코드','소재명','샘플수량','세터소재',
-  '가스종류','봄베용적(L)','1차압시작(bar)','1차압종료(bar)','퍼징횟수',
-  '백필유량(L/min)','상시유량(L/min)',
-  '최고온도(℃)','총사이클시간(분)','가스필요량(L)','가스가용량(L)','여유율',
-  '차단벽삽입','도어대각체결','프로그램저장확인',
-  '결과색상','변형여부','크랙여부','수축률(%)','소결성공여부',
-  '특이사항','다음런개선점',
-  '작성자','등록시각','수정시각','삭제됨','삭제자','삭제시각'
-];
+const SB_BASE = ['batch_id','date','furnace','atmosphere_gas','gas_flow_lpm','vacuum',
+  'initial_temp_c','initial_hold_min','ramp_up_c_min','peak_temp_c','peak_hold_min',
+  'ramp_down_c_min','cool_temp_c','cool_hold_min','furnace_position','log_file_url','operator','notes'];
+const SB_EXTRA = ['status','material','lot_no','steps_json','total_min',
+  'cylinder_l','cyl_bar_start','cyl_bar_end','purge_count','gas_margin',
+  'check_baffle','check_door','check_program','result_summary',
+  'created_by','created_at','updated_at','deleted'];
 
-const STEPS_HEADER = ['RunNo','StepNo','구간명','목표온도(℃)','승온시간(분)','승온속도(℃/min)','유지시간(분)','비고'];
-const IMAGES_HEADER = ['RunNo','FileId','파일명','구분','업로더','시각','메모'];
-const LOG_HEADER = ['시각','직원','이메일','동작','대상RunNo','상세'];
-const CONFIG_HEADER = ['키','값'];
+const PARTS_BASE = ['part_id','job_id','batch_id','green_x_mm','green_y_mm','green_z_mm','green_wt_g',
+  'sint_x_mm','sint_y_mm','sint_z_mm','sint_wt_g','shrink_x_pct','shrink_y_pct','shrink_z_pct',
+  'wt_loss_pct','density_g_cm3','grade','photo_url','notes'];
+const PARTS_EXTRA = ['part_name','updated_at','deleted'];
 
-const DEFAULT_CONFIG = [
-  ['관리자이메일','kdsan1203@gmail.com'],
-  ['기본봄베용적(L)','47'],
-  ['최소여유율','1.5'],
-  ['야간무인최소여유율','2.0'],
-  ['비고','여유율 = 가스가용량 ÷ 가스필요량. SOP §6 기준.']
-];
+const PHOTOS_HEADERS = ['batch_id','part_id','kind','file_id','url','file_name','uploaded_by','uploaded_at','deleted'];
+const LOG_HEADERS = ['at','user','action','batch_id','detail'];
 
-/* 소재 목록 - 잉크 Lot No 시스템의 SDS 시트와 같은 코드 체계 */
-const MATERIALS = [
-  {code:'CU',  name:'Copper (구리)',              gas:'Ar-5%H₂',  minPurge:2, safeTemp:150},
-  {code:'SUS', name:'316L Stainless Steel',       gas:'Ar-5%H₂',  minPurge:2, safeTemp:150},
-  {code:'TI',  name:'Titanium (티타늄)',           gas:'고순도 Ar', minPurge:3, safeTemp:100},
-  {code:'FE',  name:'Iron (철)',                   gas:'Ar-5%H₂',  minPurge:2, safeTemp:150},
-  {code:'NI',  name:'Nickel (니켈)',               gas:'Ar-5%H₂',  minPurge:2, safeTemp:150},
-  {code:'AL',  name:'Aluminum (알루미늄)',         gas:'고순도 Ar', minPurge:3, safeTemp:150},
-  {code:'W',   name:'Tungsten (텅스텐)',           gas:'Ar-5%H₂',  minPurge:3, safeTemp:150},
-  {code:'WC',  name:'Tungsten Carbide',           gas:'Ar-5%H₂',  minPurge:3, safeTemp:150},
-  {code:'PH',  name:'17-4 PH (SUS)',              gas:'Ar-5%H₂',  minPurge:2, safeTemp:150},
-  {code:'NB',  name:'Niobium (니오븀)',            gas:'고순도 Ar', minPurge:3, safeTemp:100}
-];
+const DEFAULT_LOOKUPS = {
+  material: ['316L SUS','Aluminum','Copper','Iron','Nickel','Titanium','Tungsten'],
+  grade: ['정상','크랙','휨','붕괴'],
+  furnace: ['소결로1']
+};
 
-/* ── 웹앱 진입점 ─────────────────────────────────────── */
+/* ── 진입점 ─────────────────────────────────────────── */
 
 function doGet() {
-  return HtmlService.createTemplateFromFile('Index')
-    .evaluate()
-    .setTitle('소결조건 기록 · GAUSS')
+  return HtmlService.createHtmlOutputFromFile('Index')
+    .setTitle('GAUSS 소결 기록')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
-/* ── 시트 준비 ───────────────────────────────────────── */
+/** 최초 1회: 편집기에서 실행해 권한 승인 + 시트 준비 */
+function setup() {
+  const ss = ss_();
+  table_(ss, 'SinterBatches', SB_BASE, SB_EXTRA);
+  table_(ss, 'Parts', PARTS_BASE, PARTS_EXTRA);
+  table_(ss, 'Photos', PHOTOS_HEADERS, []);
+  table_(ss, 'ActivityLog', LOG_HEADERS, []);
+  folder_();
+  Logger.log('준비 완료: ' + ss.getName());
+}
 
-function sheet_(name, header) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+/* ── 시트 유틸 ──────────────────────────────────────── */
+
+function ss_() {
+  if (SHEET_ID) {
+    try { return SpreadsheetApp.openById(SHEET_ID); }
+    catch (e) {
+      throw new Error('「소결 데이터」 시트를 열 수 없습니다. 시트 소유자에게 편집 권한을 받거나, ' +
+        'Code.gs 맨 위 SHEET_ID 를 비워 이 스크립트의 시트를 쓰세요.');
+    }
+  }
+  return SpreadsheetApp.getActiveSpreadsheet();
+}
+
+/** 시트를 열고(없으면 만들고) 빠진 열은 맨 뒤에 추가한 뒤 {sh, h, col} 반환 */
+function table_(ss, name, base, extra) {
   let sh = ss.getSheetByName(name);
+  const want = base.concat(extra);
   if (!sh) {
     sh = ss.insertSheet(name);
-    sh.appendRow(header);
+    sh.getRange(1, 1, 1, want.length).setValues([want]).setFontWeight('bold');
     sh.setFrozenRows(1);
-    sh.getRange(1, 1, 1, header.length).setFontWeight('bold').setBackground('#EEEDE9');
   }
-  return sh;
-}
-
-function ensureSheets_() {
-  sheet_(RUNS_SHEET, RUNS_HEADER);
-  sheet_(STEPS_SHEET, STEPS_HEADER);
-  sheet_(IMAGES_SHEET, IMAGES_HEADER);
-  sheet_(LOG_SHEET, LOG_HEADER);
-  const cfg = sheet_(CONFIG_SHEET, CONFIG_HEADER);
-  if (cfg.getLastRow() < 2) {
-    cfg.getRange(2, 1, DEFAULT_CONFIG.length, 2).setValues(DEFAULT_CONFIG);
+  const lastCol = Math.max(sh.getLastColumn(), 1);
+  let h = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
+  const missing = want.filter(k => h.indexOf(k) < 0);
+  if (missing.length) {
+    sh.getRange(1, h.length + 1, 1, missing.length).setValues([missing]).setFontWeight('bold');
+    h = h.concat(missing);
   }
+  const col = {};
+  h.forEach((k, i) => { if (k) col[k] = i; });
+  return { sh: sh, h: h, col: col };
 }
 
-/** 최초 1회 실행용 - 시트 5개와 사진 폴더를 만들어 둡니다. */
-function setup() {
-  ensureSheets_();
-  photoFolder_();
-  SpreadsheetApp.getActiveSpreadsheet().toast('시트 준비 완료', SS_NAME_SUFFIX, 5);
+function tz_() { return Session.getScriptTimeZone() || 'Asia/Seoul'; }
+
+function cell_(v) {
+  if (v instanceof Date) {
+    const hasTime = v.getHours() || v.getMinutes() || v.getSeconds();
+    return Utilities.formatDate(v, tz_(), hasTime ? 'yyyy-MM-dd HH:mm' : 'yyyy-MM-dd');
+  }
+  return v;
 }
 
-function config_(key) {
-  const sh = sheet_(CONFIG_SHEET, CONFIG_HEADER);
-  const last = sh.getLastRow();
-  if (last < 2) return '';
-  const rows = sh.getRange(2, 1, last - 1, 2).getValues();
-  for (let i = 0; i < rows.length; i++) if (rows[i][0] === key) return rows[i][1];
-  return '';
+function rows_(t) {
+  const n = t.sh.getLastRow() - 1;
+  if (n < 1) return [];
+  const vals = t.sh.getRange(2, 1, n, t.h.length).getValues();
+  return vals.map((r, i) => {
+    const o = { _row: i + 2 };
+    t.h.forEach((k, j) => { if (k) o[k] = cell_(r[j]); });
+    return o;
+  });
 }
 
-/* ── 사진 폴더 (잉크 Lot 시스템과 같은 명명 규칙) ───────── */
+function isDeleted_(o) { return o.deleted === true || String(o.deleted).toUpperCase() === 'TRUE'; }
 
-function photoFolder_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const folderName = 'GAUSS 소결 런 사진 (' + ss.getName() + ')';
-  const it = DriveApp.getFoldersByName(folderName);
-  if (it.hasNext()) return it.next();
-  return DriveApp.createFolder(folderName);
+/** key 열 값으로 행을 찾아 obj 의 필드만 덮어쓰기. 없으면 새 행 추가 */
+function upsert_(t, key, obj) {
+  const all = rows_(t);
+  const hit = all.find(r => String(r[key]) === String(obj[key]));
+  const row = t.h.map(k => (k in obj) ? obj[k] : (hit ? (hit[k] === undefined ? '' : hit[k]) : ''));
+  if (hit) t.sh.getRange(hit._row, 1, 1, row.length).setValues([row]);
+  else t.sh.appendRow(row);
 }
 
-/* ── 사용자 / 로그 ───────────────────────────────────── */
+function num_(v) {
+  if (v === '' || v === null || v === undefined) return '';
+  const n = parseFloat(v);
+  return isNaN(n) ? '' : n;
+}
 
-function userEmail_() {
+function pct_(before, after) {
+  const b = parseFloat(before), a = parseFloat(after);
+  if (!b || isNaN(a)) return '';
+  return Math.round((b - a) / b * 1000) / 10;
+}
+
+function me_() {
   try { return Session.getActiveUser().getEmail() || ''; } catch (e) { return ''; }
 }
 
-function userName_() {
-  const email = userEmail_();
-  if (!email) return '알 수 없음';
-  const admin = String(config_('관리자이메일') || '');
-  if (admin.split(',').map(function (s) { return s.trim(); }).indexOf(email) >= 0) return '김대산';
-  return email.split('@')[0];
-}
-
-function log_(action, runNo, detail) {
+function log_(ss, action, batchId, detail, who) {
   try {
-    sheet_(LOG_SHEET, LOG_HEADER).appendRow([
-      new Date(), userName_(), userEmail_(), action, runNo || '', detail || ''
-    ]);
-  } catch (e) { /* 로그 실패가 저장을 막지 않도록 */ }
+    table_(ss, 'ActivityLog', LOG_HEADERS, []).sh
+      .appendRow([new Date(), who || me_(), action, batchId || '', detail || '']);
+  } catch (e) {}
 }
 
-/* ── 런 번호 자동 생성: SR-YYMMDD-NN ─────────────────── */
-
-function nextRunNo_(dateStr) {
-  const tz = Session.getScriptTimeZone();
-  const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
-  const ymd = Utilities.formatDate(d, tz, 'yyMMdd');
-  const prefix = 'SR-' + ymd + '-';
-  const sh = sheet_(RUNS_SHEET, RUNS_HEADER);
-  const last = sh.getLastRow();
-  let max = 0;
-  if (last >= 2) {
-    const col = sh.getRange(2, 1, last - 1, 1).getValues();
-    col.forEach(function (r) {
-      const v = String(r[0] || '');
-      if (v.indexOf(prefix) === 0) {
-        const n = parseInt(v.slice(prefix.length), 10);
-        if (!isNaN(n) && n > max) max = n;
-      }
-    });
-  }
-  return prefix + ('0' + (max + 1)).slice(-2);
+function folder_() {
+  const it = DriveApp.getFoldersByName(PHOTO_FOLDER);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(PHOTO_FOLDER);
 }
 
-/* ── 초기 데이터 (화면 로딩 시 1회) ──────────────────── */
+/* ── 조회 ──────────────────────────────────────────── */
 
 function getBootstrap() {
-  ensureSheets_();
+  const ss = ss_();
   return {
-    materials: MATERIALS,
-    user: userName_(),
-    defaultCylinder: Number(config_('기본봄베용적(L)')) || 47,
-    minMargin: Number(config_('최소여유율')) || 1.5,
-    nightMargin: Number(config_('야간무인최소여유율')) || 2.0,
-    suggestedRunNo: nextRunNo_(''),
-    knownLots: knownLotNos_()
+    user: me_(),
+    sheetName: ss.getName(),
+    sheetUrl: ss.getUrl(),
+    lookups: lookups_(ss),
+    jobs: jobs_(ss),
+    lots: lots_(),
+    batches: listBatches_(ss)
   };
 }
 
-/**
- * 이미 기록된 LotNo 목록 - 입력 자동완성용.
- * 잉크 Lot No 관리 시스템 시트 ID를 Config에 '잉크시트ID'로 넣어두면
- * 그쪽 Lots 시트에서 직접 읽어옵니다. 없으면 이 시트의 과거 입력값만 사용.
- */
-function knownLotNos_() {
-  const set = {};
-  try {
-    const inkId = String(config_('잉크시트ID') || '').trim();
-    if (inkId) {
-      const lots = SpreadsheetApp.openById(inkId).getSheetByName('Lots');
-      if (lots && lots.getLastRow() >= 2) {
-        lots.getRange(2, 1, lots.getLastRow() - 1, 1).getValues()
-          .forEach(function (r) { if (r[0]) set[r[0]] = true; });
-      }
-    }
-  } catch (e) { /* 권한 없거나 시트 없으면 조용히 넘어감 */ }
-  try {
-    const sh = sheet_(RUNS_SHEET, RUNS_HEADER);
-    if (sh.getLastRow() >= 2) {
-      sh.getRange(2, 3, sh.getLastRow() - 1, 1).getValues()
-        .forEach(function (r) { if (r[0]) set[r[0]] = true; });
-    }
-  } catch (e) {}
-  return Object.keys(set).sort().reverse();
+function listBatches() { return listBatches_(ss_()); }
+
+function lookups_(ss) {
+  const out = JSON.parse(JSON.stringify(DEFAULT_LOOKUPS));
+  const sh = ss.getSheetByName('Lookups');
+  if (!sh || sh.getLastRow() < 2) return out;
+  const vals = sh.getDataRange().getValues();
+  const head = vals[0].map(String);
+  ['material', 'grade', 'furnace'].forEach(k => {
+    const i = head.indexOf(k);
+    if (i < 0) return;
+    const list = vals.slice(1).map(r => String(r[i]).trim()).filter(Boolean);
+    if (list.length) out[k] = list;
+  });
+  return out;
 }
 
-/* ── 저장 ────────────────────────────────────────────── */
+function jobs_(ss) {
+  const sh = ss.getSheetByName('Jobs');
+  if (!sh || sh.getLastRow() < 2) return [];
+  const vals = sh.getDataRange().getValues();
+  const h = vals[0].map(String);
+  const c = k => h.indexOf(k);
+  const seen = {};
+  const out = [];
+  for (let i = vals.length - 1; i >= 1 && out.length < 120; i--) {
+    const r = vals[i];
+    const id = String(r[c('job_id')] || '');
+    if (!id || seen[id] || r[c('status')] === '제외') continue;
+    seen[id] = true;
+    out.push({
+      job_id: id,
+      at: String(cell_(r[c('registered_at')]) || '').slice(0, 10),
+      name: String(r[c('output_name')] || '').replace(/\.gcode$/i, ''),
+      material: String(r[c('material')] || ''),
+      printer: String(r[c('printer_profile')] || ''),
+      status: String(r[c('status')] || ''),
+      bbox: ['bbox_x_mm', 'bbox_y_mm', 'bbox_z_mm'].map(k => {
+        const v = parseFloat(r[c(k)]);
+        return isNaN(v) ? '' : Math.round(v * 10) / 10;
+      })
+    });
+  }
+  return out;
+}
+
+function lots_() {
+  if (!LOT_SHEET_ID) return [];
+  try {
+    const sh = SpreadsheetApp.openById(LOT_SHEET_ID).getSheetByName('Lots');
+    if (!sh || sh.getLastRow() < 2) return [];
+    return sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues()
+      .map(r => String(r[0])).filter(Boolean).reverse();
+  } catch (e) { return []; }
+}
+
+function listBatches_(ss) {
+  const sb = rows_(table_(ss, 'SinterBatches', SB_BASE, SB_EXTRA)).filter(b => b.batch_id && !isDeleted_(b));
+  const parts = rows_(table_(ss, 'Parts', PARTS_BASE, PARTS_EXTRA)).filter(p => !isDeleted_(p));
+  const photos = rows_(table_(ss, 'Photos', PHOTOS_HEADERS, [])).filter(p => !isDeleted_(p));
+
+  return sb.map(b => {
+    const ps = parts.filter(p => p.batch_id === b.batch_id);
+    const grades = {};
+    ps.forEach(p => { if (p.grade) grades[p.grade] = (grades[p.grade] || 0) + 1; });
+    const sx = ps.reduce((a, p) => a.concat([parseFloat(p.shrink_x_pct), parseFloat(p.shrink_y_pct)]), []).filter(v => !isNaN(v));
+    const sz = ps.map(p => parseFloat(p.shrink_z_pct)).filter(v => !isNaN(v));
+    const avg = a => a.length ? Math.round(a.reduce((s, v) => s + v, 0) / a.length * 10) / 10 : '';
+    const ph = photos.filter(p => p.batch_id === b.batch_id);
+    return {
+      batch_id: b.batch_id, date: b.date, status: b.status || '진행중',
+      material: b.material, lot_no: b.lot_no, furnace: b.furnace,
+      gas: b.atmosphere_gas, flow: b.gas_flow_lpm,
+      peak: b.peak_temp_c, peak_hold: b.peak_hold_min, total_min: b.total_min,
+      operator: b.operator, result: b.result_summary,
+      partCount: ps.length, grades: grades,
+      shrinkXY: avg(sx), shrinkZ: avg(sz),
+      photoCount: ph.length,
+      thumbs: ph.slice(-4).map(p => p.file_id)
+    };
+  }).sort((a, b) => String(b.date + b.batch_id).localeCompare(String(a.date + a.batch_id)));
+}
+
+function getBatch(batchId) {
+  const ss = ss_();
+  const b = rows_(table_(ss, 'SinterBatches', SB_BASE, SB_EXTRA)).find(r => r.batch_id === batchId && !isDeleted_(r));
+  if (!b) throw new Error(batchId + ' 기록을 찾을 수 없습니다.');
+  let steps = [];
+  try { steps = b.steps_json ? JSON.parse(b.steps_json) : []; } catch (e) {}
+  if (!steps.length && b.peak_temp_c !== '') steps = stepsFromFlat_(b);
+  delete b._row;
+  b.steps = steps;
+  const parts = rows_(table_(ss, 'Parts', PARTS_BASE, PARTS_EXTRA))
+    .filter(p => p.batch_id === batchId && !isDeleted_(p))
+    .map(p => { delete p._row; return p; });
+  const photos = rows_(table_(ss, 'Photos', PHOTOS_HEADERS, []))
+    .filter(p => p.batch_id === batchId && !isDeleted_(p))
+    .map(p => ({ file_id: p.file_id, url: p.url, kind: p.kind, part_id: p.part_id, name: p.file_name, at: p.uploaded_at }));
+  return { batch: b, parts: parts, photos: photos };
+}
+
+/** 예전 방식(평면 열)으로만 입력된 행을 스텝 표로 복원 */
+function stepsFromFlat_(b) {
+  const s = [];
+  if (b.initial_temp_c !== '') s.push({ label: '탈지', target: b.initial_temp_c, ramp: '', hold: b.initial_hold_min });
+  s.push({ label: '소결', target: b.peak_temp_c, ramp: '', hold: b.peak_hold_min });
+  if (b.cool_temp_c !== '') s.push({ label: '냉각', target: b.cool_temp_c, ramp: '', hold: b.cool_hold_min });
+  return s;
+}
+
+/* ── 저장 ──────────────────────────────────────────── */
+
+function nextBatchId_(t, dateStr) {
+  const d = dateStr ? new Date(dateStr + 'T12:00:00') : new Date();
+  const prefix = 'SB-' + Utilities.formatDate(d, tz_(), 'yyMMdd') + '-';
+  let max = 0;
+  rows_(t).forEach(r => {
+    const v = String(r.batch_id || '');
+    if (v.indexOf(prefix) === 0) max = Math.max(max, parseInt(v.slice(prefix.length), 10) || 0);
+  });
+  return prefix + ('0' + (max + 1)).slice(-2);
+}
+
+/** 스텝 표 → 기존 평면 열(initial/ramp_up/peak/ramp_down/cool) 계산 */
+function flatFromSteps_(steps) {
+  const out = { initial_temp_c: '', initial_hold_min: '', ramp_up_c_min: '', peak_temp_c: '', peak_hold_min: '',
+    ramp_down_c_min: '', cool_temp_c: '', cool_hold_min: '', total_min: '' };
+  const s = (steps || []).filter(x => x && x.target !== '' && x.target !== undefined && !isNaN(parseFloat(x.target)));
+  if (!s.length) return out;
+  let total = 0, prev = 25, pk = 0;
+  const rates = s.map((x, i) => {
+    const t = parseFloat(x.target), ramp = parseFloat(x.ramp) || 0, hold = parseFloat(x.hold) || 0;
+    total += ramp + hold;
+    const r = ramp > 0 ? (t - prev) / ramp : '';
+    prev = t;
+    if (t > parseFloat(s[pk].target)) pk = i;
+    return r;
+  });
+  const r1 = v => v === '' ? '' : Math.round(Math.abs(v) * 10) / 10;
+  if (pk > 0) { out.initial_temp_c = num_(s[0].target); out.initial_hold_min = num_(s[0].hold); }
+  out.peak_temp_c = num_(s[pk].target);
+  out.peak_hold_min = num_(s[pk].hold);
+  out.ramp_up_c_min = r1(rates[pk]);
+  if (pk < s.length - 1) {
+    out.ramp_down_c_min = r1(rates[pk + 1]);
+    const last = s[s.length - 1];
+    out.cool_temp_c = num_(last.target);
+    out.cool_hold_min = num_(last.hold);
+  }
+  out.total_min = total;
+  return out;
+}
 
 /**
- * payload = {
- *   runNo, date, lotNo, materialCode, materialName, qty, setter,
- *   gasType, cylinderVol, pStart, pEnd, purgeCount, backfillFlow, steadyFlow,
- *   maxTemp, totalMinutes, gasNeed, gasAvail, margin,
- *   baffle, doorTight, programSaved,
- *   resultColor, deformed, cracked, shrinkage, success,
- *   notes, improve,
- *   steps: [{stepNo, label, targetTemp, rampMin, rampRate, holdMin, note}],
- *   photos: [{name, data, kind, memo}]      // kind: '장입' | '결과' | '기타'
- * }
+ * payload = { batch: {...필드}, parts: [{part_id?, job_id, part_name, green_*, sint_*, density_g_cm3, grade, notes}],
+ *             removedPartIds: [] }
  */
-function submitRun(payload) {
-  ensureSheets_();
+function saveBatch(payload) {
+  const ss = ss_();
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    const runNo = (payload.runNo && payload.runNo.trim())
-      ? payload.runNo.trim()
-      : nextRunNo_(payload.date);
-
+    const sbT = table_(ss, 'SinterBatches', SB_BASE, SB_EXTRA);
+    const ptT = table_(ss, 'Parts', PARTS_BASE, PARTS_EXTRA);
+    const b = payload.batch || {};
+    const isNew = !b.batch_id;
+    const id = isNew ? nextBatchId_(sbT, b.date) : b.batch_id;
     const now = new Date();
-    sheet_(RUNS_SHEET, RUNS_HEADER).appendRow([
-      runNo,
-      payload.date || '',
-      payload.lotNo || '',
-      payload.materialCode || '',
-      payload.materialName || '',
-      payload.qty || '',
-      payload.setter || '',
-      payload.gasType || '',
-      payload.cylinderVol || '',
-      payload.pStart || '',
-      payload.pEnd || '',
-      payload.purgeCount || '',
-      payload.backfillFlow || '',
-      payload.steadyFlow || '',
-      payload.maxTemp || '',
-      payload.totalMinutes || '',
-      payload.gasNeed || '',
-      payload.gasAvail || '',
-      payload.margin || '',
-      payload.baffle ? '확인' : '',
-      payload.doorTight ? '확인' : '',
-      payload.programSaved ? '확인' : '',
-      payload.resultColor || '',
-      payload.deformed || '',
-      payload.cracked || '',
-      payload.shrinkage || '',
-      payload.success || '',
-      payload.notes || '',
-      payload.improve || '',
-      userName_(),
-      now, '', '', '', ''
-    ]);
+    const steps = (b.steps || []).filter(x => x && (x.target !== '' || x.hold !== '' || x.label));
+    const flat = flatFromSteps_(steps);
+    const who = b.operator || me_();
 
-    const stepsSheet = sheet_(STEPS_SHEET, STEPS_HEADER);
-    (payload.steps || []).forEach(function (s, i) {
-      stepsSheet.appendRow([
-        runNo, s.stepNo || (i + 1), s.label || '',
-        s.targetTemp || '', s.rampMin || '', s.rampRate || '', s.holdMin || '', s.note || ''
-      ]);
+    const row = {
+      batch_id: id,
+      date: b.date || Utilities.formatDate(now, tz_(), 'yyyy-MM-dd'),
+      furnace: b.furnace || '',
+      atmosphere_gas: b.atmosphere_gas || '',
+      gas_flow_lpm: num_(b.gas_flow_lpm),
+      vacuum: b.vacuum || '',
+      furnace_position: b.furnace_position || '',
+      operator: b.operator || '',
+      notes: b.notes || '',
+      status: b.status || '진행중',
+      material: b.material || '',
+      lot_no: b.lot_no || '',
+      steps_json: JSON.stringify(steps),
+      cylinder_l: num_(b.cylinder_l),
+      cyl_bar_start: num_(b.cyl_bar_start),
+      cyl_bar_end: num_(b.cyl_bar_end),
+      purge_count: num_(b.purge_count),
+      gas_margin: num_(b.gas_margin),
+      check_baffle: !!b.check_baffle,
+      check_door: !!b.check_door,
+      check_program: !!b.check_program,
+      result_summary: b.result_summary || '',
+      updated_at: now,
+      deleted: false
+    };
+    Object.keys(flat).forEach(k => row[k] = flat[k]);
+    if (isNew) { row.created_by = who; row.created_at = now; }
+    upsert_(sbT, 'batch_id', row);
+
+    const existing = rows_(ptT).filter(p => p.batch_id === id);
+    let seq = existing.reduce((m, p) => Math.max(m, parseInt(String(p.part_id).split('-P')[1], 10) || 0), 0);
+    const doneJobs = [];
+    (payload.parts || []).forEach(p => {
+      const pid = p.part_id || (id + '-P' + ('0' + (++seq)).slice(-2));
+      upsert_(ptT, 'part_id', {
+        part_id: pid, job_id: p.job_id || '', batch_id: id, part_name: p.part_name || '',
+        green_x_mm: num_(p.green_x_mm), green_y_mm: num_(p.green_y_mm), green_z_mm: num_(p.green_z_mm), green_wt_g: num_(p.green_wt_g),
+        sint_x_mm: num_(p.sint_x_mm), sint_y_mm: num_(p.sint_y_mm), sint_z_mm: num_(p.sint_z_mm), sint_wt_g: num_(p.sint_wt_g),
+        shrink_x_pct: pct_(p.green_x_mm, p.sint_x_mm), shrink_y_pct: pct_(p.green_y_mm, p.sint_y_mm),
+        shrink_z_pct: pct_(p.green_z_mm, p.sint_z_mm), wt_loss_pct: pct_(p.green_wt_g, p.sint_wt_g),
+        density_g_cm3: num_(p.density_g_cm3), grade: p.grade || '', notes: p.notes || '',
+        updated_at: now, deleted: false
+      });
+      if (p.job_id) doneJobs.push(p.job_id);
+    });
+    (payload.removedPartIds || []).forEach(pid => {
+      if (existing.some(p => p.part_id === pid)) upsert_(ptT, 'part_id', { part_id: pid, deleted: true, updated_at: now });
     });
 
-    const saved = savePhotos_(runNo, payload.photos);
+    if (row.status === '완료' && doneJobs.length) markJobsSintered_(ss, doneJobs);
 
-    log_('런등록', runNo,
-      (payload.materialName || '') + ' · ' + (payload.lotNo || 'Lot 미지정') +
-      ' · 최고온 ' + (payload.maxTemp || '-') + '℃ · 사진 ' + saved.length + '장');
-
-    return { ok: true, runNo: runNo, photoCount: saved.length, nextRunNo: nextRunNo_(payload.date) };
+    log_(ss, isNew ? '등록' : '수정', id,
+      [row.material, row.peak_temp_c ? row.peak_temp_c + '℃' : '', (payload.parts || []).length + '개 부품', row.status].filter(Boolean).join(' · '), who);
+    return getBatch(id);
   } finally {
     lock.releaseLock();
   }
 }
 
-function savePhotos_(runNo, photos) {
-  if (!photos || !photos.length) return [];
-  const folder = photoFolder_();
-  const sh = sheet_(IMAGES_SHEET, IMAGES_HEADER);
-  const out = [];
-  photos.forEach(function (p) {
-    if (!p || !p.data) return;
-    const m = /^data:([^;]+);base64,(.+)$/.exec(p.data);
-    if (!m) return;
-    const fname = runNo + '_' + (p.kind || '기타') + '_' + (p.name || 'photo.jpg');
-    const file = folder.createFile(Utilities.newBlob(Utilities.base64Decode(m[2]), m[1], fname));
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    sh.appendRow([runNo, file.getId(), p.name || fname, p.kind || '기타', userName_(), new Date(), p.memo || '']);
-    out.push(file.getId());
-  });
-  return out;
-}
-
-/** 기존 런에 사진만 추가 */
-function addPhotos(runNo, photos) {
-  ensureSheets_();
-  const saved = savePhotos_(runNo, photos);
-  log_('사진등록', runNo, saved.length + '장');
-  return { ok: true, count: saved.length };
-}
-
-/* ── 조회 ────────────────────────────────────────────── */
-
-function getRecentRuns(limit) {
-  ensureSheets_();
-  const sh = sheet_(RUNS_SHEET, RUNS_HEADER);
-  const last = sh.getLastRow();
-  if (last < 2) return [];
-  const values = sh.getRange(2, 1, last - 1, RUNS_HEADER.length).getValues();
-  const tz = Session.getScriptTimeZone();
-
-  const imgs = {};
-  const ish = sheet_(IMAGES_SHEET, IMAGES_HEADER);
-  if (ish.getLastRow() >= 2) {
-    ish.getRange(2, 1, ish.getLastRow() - 1, IMAGES_HEADER.length).getValues()
-      .forEach(function (r) {
-        if (!imgs[r[0]]) imgs[r[0]] = [];
-        imgs[r[0]].push({ fileId: r[1], name: r[2], kind: r[3] });
-      });
-  }
-
-  return values
-    .filter(function (row) { return !row[RUNS_HEADER.indexOf('삭제됨')]; })
-    .reverse()
-    .slice(0, limit || 30)
-    .map(function (row) {
-      const o = {};
-      RUNS_HEADER.forEach(function (h, i) {
-        const v = row[i];
-        o[h] = (v instanceof Date) ? Utilities.formatDate(v, tz, 'yyyy-MM-dd HH:mm') : v;
-      });
-      o.photos = imgs[row[0]] || [];
-      return o;
-    });
-}
-
-function getStepsForRun(runNo) {
-  const sh = sheet_(STEPS_SHEET, STEPS_HEADER);
-  const last = sh.getLastRow();
-  if (last < 2) return [];
-  return sh.getRange(2, 1, last - 1, STEPS_HEADER.length).getValues()
-    .filter(function (r) { return r[0] === runNo; })
-    .map(function (r) {
-      return { stepNo: r[1], label: r[2], targetTemp: r[3], rampMin: r[4], rampRate: r[5], holdMin: r[6], note: r[7] };
-    });
-}
-
-/** 과거 런을 그대로 불러와 새 런의 출발점으로 사용 */
-function loadRunForCopy(runNo) {
-  const sh = sheet_(RUNS_SHEET, RUNS_HEADER);
-  const last = sh.getLastRow();
-  if (last < 2) return null;
-  const values = sh.getRange(2, 1, last - 1, RUNS_HEADER.length).getValues();
-  for (let i = 0; i < values.length; i++) {
-    if (values[i][0] === runNo) {
-      const o = {};
-      RUNS_HEADER.forEach(function (h, j) { o[h] = values[i][j]; });
-      o.steps = getStepsForRun(runNo);
-      return o;
+/** Lookups 에 정의된 '소결완료' 상태로 출력 작업을 표시 */
+function markJobsSintered_(ss, jobIds) {
+  const sh = ss.getSheetByName('Jobs');
+  if (!sh || sh.getLastRow() < 2) return;
+  const vals = sh.getDataRange().getValues();
+  const h = vals[0].map(String);
+  const ci = h.indexOf('job_id'), si = h.indexOf('status');
+  if (ci < 0 || si < 0) return;
+  for (let i = 1; i < vals.length; i++) {
+    const st = String(vals[i][si]);
+    if (jobIds.indexOf(String(vals[i][ci])) >= 0 && (st === '등록됨' || st === '출력함')) {
+      sh.getRange(i + 1, si + 1).setValue('소결완료');
     }
   }
-  return null;
 }
 
-/** 소프트 삭제 (잉크 Lot 시스템과 동일 방식) */
-function deleteRun(runNo, reason) {
-  const sh = sheet_(RUNS_SHEET, RUNS_HEADER);
-  const last = sh.getLastRow();
-  if (last < 2) return { ok: false };
-  const col = sh.getRange(2, 1, last - 1, 1).getValues();
-  for (let i = 0; i < col.length; i++) {
-    if (col[i][0] === runNo) {
-      const row = i + 2;
-      sh.getRange(row, RUNS_HEADER.indexOf('삭제됨') + 1, 1, 3)
-        .setValues([[true, userName_(), new Date()]]);
-      log_('런삭제', runNo, reason || '');
-      return { ok: true };
-    }
+function deleteBatch(batchId, who) {
+  const ss = ss_();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const now = new Date();
+    upsert_(table_(ss, 'SinterBatches', SB_BASE, SB_EXTRA), 'batch_id', { batch_id: batchId, deleted: true, updated_at: now });
+    const ptT = table_(ss, 'Parts', PARTS_BASE, PARTS_EXTRA);
+    rows_(ptT).filter(p => p.batch_id === batchId)
+      .forEach(p => upsert_(ptT, 'part_id', { part_id: p.part_id, deleted: true, updated_at: now }));
+    log_(ss, '삭제', batchId, '', who);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
   }
-  return { ok: false };
+}
+
+/* ── 사진 ──────────────────────────────────────────── */
+
+/** 사진(또는 로그 파일) 1개 업로드. data 는 base64 (data: 접두어 없이) */
+function uploadFile(batchId, partId, kind, name, mime, data, who) {
+  const ss = ss_();
+  const blob = Utilities.newBlob(Utilities.base64Decode(data), mime || 'application/octet-stream',
+    batchId + (partId ? '_' + partId.split('-').pop() : '') + '_' + (kind || '기타') + '_' + (name || 'file'));
+  const file = folder_().createFile(blob);
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  const url = file.getUrl();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    table_(ss, 'Photos', PHOTOS_HEADERS, []).sh.appendRow(
+      [batchId, partId || '', kind || '기타', file.getId(), url, name || '', who || me_(), new Date(), false]);
+    if (partId) syncPartPhotos_(ss, partId);
+    if (kind === '로그') {
+      upsert_(table_(ss, 'SinterBatches', SB_BASE, SB_EXTRA), 'batch_id', { batch_id: batchId, log_file_url: url });
+    }
+  } finally {
+    lock.releaseLock();
+  }
+  log_(ss, '사진', batchId, (partId ? partId + ' · ' : '') + (kind || '') + ' · ' + (name || ''), who);
+  return { file_id: file.getId(), url: url, kind: kind, part_id: partId || '', name: name };
+}
+
+function deletePhoto(fileId, who) {
+  const ss = ss_();
+  const t = table_(ss, 'Photos', PHOTOS_HEADERS, []);
+  const hit = rows_(t).find(r => r.file_id === fileId);
+  if (!hit) return { ok: false };
+  t.sh.getRange(hit._row, t.col.deleted + 1).setValue(true);
+  if (hit.part_id) syncPartPhotos_(ss, hit.part_id);
+  log_(ss, '사진삭제', hit.batch_id, hit.file_name, who);
+  return { ok: true };
+}
+
+/** Parts.photo_url 에 해당 부품의 사진 링크를 줄바꿈으로 모아 둠 (시트에서 바로 열어볼 수 있게) */
+function syncPartPhotos_(ss, partId) {
+  const urls = rows_(table_(ss, 'Photos', PHOTOS_HEADERS, []))
+    .filter(r => r.part_id === partId && !isDeleted_(r)).map(r => r.url);
+  upsert_(table_(ss, 'Parts', PARTS_BASE, PARTS_EXTRA), 'part_id', { part_id: partId, photo_url: urls.join('\n') });
 }
