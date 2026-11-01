@@ -2,8 +2,17 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>일일계획표</title>
+
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#1F4E9C">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="계획표">
+<link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <!-- Firebase v8 Compat SDK 추가 -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -2046,7 +2055,18 @@ function checkDeviceConflict(remote) {
 }
 
 function initAuthListener() {
-  if (!auth) return;
+  if (!auth) {
+    /* Firebase Auth 자체를 쓸 수 없는 상태(SDK 로드 실패 / 네트워크 없음).
+       예전에는 그냥 return 해버려서 로그인 화면에 갇혔습니다.
+       폰에 앱으로 깔면 신호 없는 곣에서 먹통이 되므로 로컬 모드로 엽니다. */
+    const wall = document.getElementById("authWall");
+    const main = document.getElementById("mainContent");
+    if (wall) wall.style.display = "none";
+    if (main) main.style.display = "block";
+    console.warn("[auth] Auth 사용 불가 - 로컬 모드로 진입");
+    try { toast("오프라인입니다. 기록은 이 기기에 저장되고, 연결되면 동기화됩니다"); } catch (e) {}
+    return;
+  }
   auth.onAuthStateChanged((user) => {
     currentUser = user;
     const wall = document.getElementById("authWall");
@@ -2180,6 +2200,67 @@ initAuthListener();
 if(!useFirebase){
   scheduleAutoBackup();
 }
+</script>
+
+<style>
+#installBar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));
+  z-index:9000;display:none;align-items:center;gap:10px;background:#1F4E9C;color:#fff;
+  padding:10px 14px;border-radius:999px;box-shadow:0 6px 24px rgba(0,0,0,.25);
+  font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;font-size:13px;font-weight:600}
+#installBar.show{display:flex}
+#installBar button{border:none;border-radius:999px;padding:6px 12px;font-weight:700;font-size:13px}
+#installGo{background:#F2C744;color:#1E1C19}
+#installNo{background:transparent;color:#cdd8ee;padding:6px 4px;font-weight:500}
+</style>
+<div id="installBar">
+  <span>홈 화면에 앱으로 추가할 수 있습니다</span>
+  <button id="installGo" type="button">설치</button>
+  <button id="installNo" type="button">나중에</button>
+</div>
+<script>
+(function(){
+  var SKIP_KEY = "pwa_install_dismissed";
+  var bar = document.getElementById("installBar");
+  var deferred = null;
+  function say(m){ try{ toast(m); }catch(e){ console.log("[pwa] "+m); } }
+  function standalone(){ return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true; }
+  window.addEventListener("beforeinstallprompt", function(e){
+    e.preventDefault(); deferred = e;
+    if(standalone()) return;
+    try{ if(localStorage.getItem(SKIP_KEY)==="1") return; }catch(_){}
+    bar.classList.add("show");
+  });
+  document.getElementById("installGo").addEventListener("click", function(){
+    bar.classList.remove("show");
+    if(!deferred) return;
+    deferred.prompt();
+    deferred.userChoice.then(function(r){ if(r && r.outcome === "accepted") say("홈 화면에 추가했습니다"); deferred = null; });
+  });
+  document.getElementById("installNo").addEventListener("click", function(){
+    bar.classList.remove("show");
+    try{ localStorage.setItem(SKIP_KEY,"1"); }catch(_){}
+  });
+  window.addEventListener("appinstalled", function(){
+    bar.classList.remove("show");
+    try{ localStorage.setItem(SKIP_KEY,"1"); }catch(_){}
+    say("앱으로 설치됐습니다");
+  });
+  if("serviceWorker" in navigator){
+    window.addEventListener("load", function(){
+      navigator.serviceWorker.register("./sw.js").then(function(reg){
+        reg.addEventListener("updatefound", function(){
+          var nw = reg.installing;
+          if(!nw) return;
+          nw.addEventListener("statechange", function(){
+            if(nw.state === "installed" && navigator.serviceWorker.controller){
+              say("새 버전이 준비됐습니다. 새로고침하면 적용됩니다");
+            }
+          });
+        });
+      }).catch(function(e){ console.warn("[pwa] 서비스워커 등록 실패", e); });
+    });
+  }
+})();
 </script>
 </body>
 </html>
