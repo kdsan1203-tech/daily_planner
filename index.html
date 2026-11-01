@@ -657,6 +657,34 @@ const CLIENT_ID=(()=>{try{let c=store.getItem("daily-plan-client");
   if(!c){c=Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
   store.setItem("daily-plan-client",c);}return c;}catch(e){return "tmp"+Math.random().toString(36).slice(2,8);}})();
 
+/* ══ 서버 시각 보정 ═══════════════════════════════════════════════
+   기기마다 시계가 다릅니다. 사무실 PC가 폰보다 몇 분 빠르면, 나중에 쓴
+   폰 기록이 "더 오래된 것"으로 판정돼 밀려납니다. Firebase가 알려주는
+   서버와의 시차를 더해, 모든 기기가 같은 기준으로 시각을 찍게 합니다. */
+let serverSkew=0;
+const now=()=>Date.now()+serverSkew;
+
+/* ══ 미전송 큐 ════════════════════════════════════════════════════
+   ★ 이것이 "폰에서 쓴 게 PC에 없던" 사고의 핵심 대책입니다.
+   예전에는 화면을 끄는 순간 pushCloud()를 쏘고 끝이었습니다. 전송은
+   비동기라서 폰이 앱을 얼리면 중간에 끊기는데, 끊겼다는 기록이 어디에도
+   남지 않았습니다. 로컬에는 저장돼 있으니 화면상 멀쩡해 보이고요.
+   이제 바뀐 자리를 디스크에 적어두고, 서버가 "받았다"고 확인해 준
+   뒤에만 지웁니다. 못 보낸 게 있으면 다음에 앱을 열 때 자동으로 다시
+   보내고, 화면에도 몇 건 남았는지 표시합니다. */
+const DIRTY_KEY="daily-plan-dirty";
+let dirty=(()=>{try{const v=JSON.parse(store.getItem(DIRTY_KEY)||"[]");
+  return new Set(Array.isArray(v)?v:[]);}catch(e){return new Set();}})();
+function saveDirty(){try{store.setItem(DIRTY_KEY,JSON.stringify([...dirty]));}catch(e){}}
+function markDirty(p){if(!dirty.has(p)){dirty.add(p);saveDirty();}}
+function markAllDirty(){
+  dirty=new Set();
+  Object.keys(db.days||{}).forEach(k=>dirty.add("days/"+k));
+  Object.keys(db.weeks||{}).forEach(k=>dirty.add("weeks/"+k));
+  ["backlog","rituals","settings","font"].forEach(k=>dirty.add(k));
+  saveDirty();
+}
+
 /* ══ 기본 리츄얼 ══ */
 function defaultRituals(){return[
  {id:"am",name:"오전 리츄얼",rows:[
@@ -729,10 +757,9 @@ function normDay(d,k){d=(d&&typeof d==="object")?d:{};
   Object.keys(d.slots).forEach(k=>{
     const sv=d.slots[k];
     if(!sv||typeof sv!=="object"){d.slots[k]={p:"",a:""};return;}
-    d.slots[k]={
-      p:typeof sv.p==="string"?sv.p:"",
-      a:typeof sv.a==="string"?sv.a:""
-    };
+    const o={p:typeof sv.p==="string"?sv.p:"",a:typeof sv.a==="string"?sv.a:""};
+    if(Number(sv.u))o.u=Number(sv.u);   // 칸별 수정 시각(있으면 보존)
+    d.slots[k]=o;
   });
   d.rit  =(d.rit  &&typeof d.rit  ==="object")?d.rit  :{};
   d.fields=(d.fields&&typeof d.fields==="object")?d.fields:{};
@@ -795,26 +822,74 @@ function pick(l,r,hasContent){
   return (l.u||0)>(r.u||0)?"local":"remote";
 }
 
+/* 시간표 칸 단위 병합.
+   같은 날을 폰과 PC가 모두 건드렸을 때, 예전에는 그 날 기록이 통째로
+   한쪽만 남았습니다. 이제 칸마다 따로 비교해서 양쪽 다 살립니다.
+   - 한쪽만 내용이 있으면 그쪽
+   - 둘 다 있으면 칸별 시각(u)이 최신인 쪽, 없으면 날짜 시각으로 판정 */
+function slotFilled(v){return !!v&&(((v.p||"").trim())||((v.a||"").trim()));}
+function mergeSlots(l,r,lu,ru){
+  const ls=(l&&l.slots)||{}, rs=(r&&r.slots)||{}, out={};
+  const keys=new Set([...Object.keys(ls),...Object.keys(rs)]);
+  keys.forEach(k=>{
+    const a=ls[k],b=rs[k],af=slotFilled(a),bf=slotFilled(b);
+    if(af&&!bf){out[k]=a;return;}
+    if(bf&&!af){out[k]=b;return;}
+    if(!af&&!bf){if(a||b)out[k]=a||b;return;}
+    const au=Number(a.u)||lu||0, bu=Number(b.u)||ru||0;
+    out[k]=au>=bu?a:b;
+  });
+  return out;
+}
+
+/* 미전송 날짜용 항목별 병합: 원격을 바탕에 깔고, 로컬에 내용이 있는
+   항목만 로컬 것으로 덮는다. 양쪽 다 보존하는 쪽으로 기운다. */
+function mergeDayFields(l,r){
+  const o=Object.assign({},r);
+  o.slots=mergeSlots(l,r,l.u||0,r.u||0);
+  if(hasBig(l.big))o.big=l.big;
+  if(toArr(l.subs).some(x=>x&&x.t&&x.t.trim()))o.subs=l.subs;
+  if((l.memo||"").trim())o.memo=l.memo;
+  if(l.rit&&Object.keys(l.rit).some(k=>l.rit[k]))o.rit=Object.assign({},r.rit||{},l.rit);
+  if(l.fields&&Object.keys(l.fields).some(k=>(l.fields[k]||"").trim()))
+    o.fields=Object.assign({},r.fields||{},l.fields);
+  o.u=Math.max(Number(l.u)||0,Number(r.u)||0);
+  return o;
+}
+
 let mergeKeptLocal=false;
-function mergeDB(local,remote){
+/* protect: 아직 서버로 못 보낸 자리. 원격이 무엇이든 로컬을 지킨다. */
+function mergeDB(local,remote,protect){
+  const guard=protect||new Set();
   const out=normalizeDB(remote);
   const L=normalizeDB(local);
   mergeKeptLocal=false;
   Object.keys(L.days).forEach(k=>{
     const l=L.days[k],r=out.days[k];
-    if(!r||pick(l,r,dayHasContent)==="local"){out.days[k]=l;mergeKeptLocal=true;}
+    if(guard.has("days/"+k)){
+      /* 미전송 로컬이 우선이되, 항목별로 합친다. 통째로 로컬을 쓰면
+         그 날 원격에만 있던 중요업무나 메모가 사라지기 때문이다. */
+      out.days[k]=r?mergeDayFields(l,r):l;mergeKeptLocal=true;return;
+    }
+    if(!r){out.days[k]=l;mergeKeptLocal=true;return;}
+    const win=pick(l,r,dayHasContent);
+    const merged=win==="local"?l:r;
+    merged.slots=mergeSlots(l,r,l.u||0,r.u||0);
+    out.days[k]=merged;
+    if(win==="local")mergeKeptLocal=true;
   });
   Object.keys(L.weeks).forEach(k=>{
     const l=L.weeks[k],r=out.weeks[k];
-    if(!r||pick(l,r,weekHasContent)==="local"){out.weeks[k]=l;mergeKeptLocal=true;}
+    if(guard.has("weeks/"+k)||!r||pick(l,r,weekHasContent)==="local"){out.weeks[k]=l;mergeKeptLocal=true;}
   });
-  if(!remote||!remote.rituals)out.rituals=L.rituals;
-  if((L.bu||0)>(out.bu||0)){out.backlog=L.backlog;out.bu=L.bu;mergeKeptLocal=true;}
+  if(guard.has("rituals")||!remote||!remote.rituals)out.rituals=L.rituals;
+  if(guard.has("settings"))out.settings=L.settings;
+  if(guard.has("backlog")||(L.bu||0)>(out.bu||0)){out.backlog=L.backlog;out.bu=L.bu;mergeKeptLocal=true;}
   out.font=L.font||out.font;
   return out;
 }
 
-const APP_VER="v9.1";
+const APP_VER="v10";
 
 /* ══════════════════════════════════════════════════════════════════
    자동 백업 시스템
@@ -1020,14 +1095,48 @@ let cloudListenerActive=false;  // 클라우드 리스너가 이미 활성화됐
 let localSaved=true;        // 로컬 저장 상태
 let cloudSaveSuccess=true;  // 클라우드 저장 성공 여부
 
+let lastSent={backlog:"",rituals:"",settings:"",font:""};
+function snapshotShared(){return{
+  backlog:JSON.stringify(db.backlog||[]),
+  rituals:JSON.stringify(db.rituals||[]),
+  settings:JSON.stringify(db.settings||{}),
+  font:String(db.font||"")};}
+/* 시간표 칸별 "마지막으로 본 내용" — 바뀐 칸만 시각을 갱신하기 위한 기준 */
+let slotSeen={};
 function stamp(){
-  const t=Date.now();
+  const t=now();
   /* 내용이 없는 껍데기에 최신 시각을 찍으면, 그 빈 데이터가 병합에서
      클라우드의 실제 기록을 이겨버립니다. 내용이 있을 때만 찍습니다. */
   const d=db.days[cur];
-  if(d&&dayHasContent(d))d.u=t;
+  if(d&&dayHasContent(d)){
+    d.u=t;
+    /* 시간표는 칸마다 따로 시각을 남깁니다. 같은 날을 두 기기에서 만져도
+       서로 다른 시간대를 건드렸다면 양쪽 다 살아남게 하기 위함입니다. */
+    if(d.slots)Object.keys(d.slots).forEach(k=>{
+      const sv=d.slots[k];if(!sv)return;
+      const sig=cur+"|"+k, val=(sv.p||"")+"\u0000"+(sv.a||"");
+      if(slotSeen[sig]!==val){        // 내용이 바뀐 칸만 시각을 새로 찍는다
+        slotSeen[sig]=val;
+        if(val.replace(/\u0000/g,"").trim())sv.u=t;
+      }
+    });
+    markDirty("days/"+cur);
+  }
   const wk=mondayOf(cur),w=db.weeks[wk];
-  if(w&&weekHasContent(w))w.u=t;
+  if(w&&weekHasContent(w)){w.u=t;markDirty("weeks/"+wk);}
+
+  /* 날짜와 무관한 항목(백로그·리츄얼·설정·글꼴)은 내용이 바뀌었을 때만 표시.
+     ★ 단 클라우드를 아직 한 번도 못 받은 상태에서는 표시하지 않습니다.
+       새 기기의 '기본 리츄얼'이 바뀐 것으로 잡히면, 보호 규칙 때문에
+       그 기본값이 실제 리츄얼을 덮어써 버립니다. */
+  const cmp=snapshotShared();
+  if(cloudSynced||!useFirebase){
+    Object.keys(cmp).forEach(k=>{
+      if(cmp[k]!==lastSent[k]){markDirty(k);if(k==="backlog")db.bu=t;}
+    });
+  }else{
+    lastSent=cmp;   // 기준선만 잡아두고, 판정은 클라우드를 받은 뒤부터
+  }
 }
 
 function saveLocal(){
@@ -1043,34 +1152,67 @@ function saveLocal(){
 }
 
 let pushRetry={timer:null,count:0,maxRetries:5};
+
+/* 미전송 건수를 화면에 드러냅니다. 예전에는 못 보낸 게 있어도
+   "동기화됨"처럼 보여서, 기록이 올라간 줄 알고 자리를 뜨게 됐습니다. */
+function syncFlag(){
+  if(dirty.size)flag("⚠ 미전송 "+dirty.size+"건 · 이 기기에 저장됨");
+  else flag("☁ 동기화됨 "+new Date().toTimeString().slice(0,5));
+}
+
+/* 바뀐 자리만 골라 보냅니다. 전체를 통째로 덮어쓰지 않으므로
+   다른 날짜를 각자 편집한 두 기기가 서로를 지우지 않습니다. */
+function buildUpdate(paths){
+  const u={};
+  paths.forEach(pth=>{
+    if(pth.indexOf("days/")===0){const k=pth.slice(5);u["days/"+k]=db.days[k]||null;}
+    else if(pth.indexOf("weeks/")===0){const k=pth.slice(6);u["weeks/"+k]=db.weeks[k]||null;}
+    else if(pth==="backlog"){u.backlog=db.backlog||[];u.bu=db.bu||0;}
+    else if(pth==="rituals"){u.rituals=db.rituals;}
+    else if(pth==="settings"){u.settings=db.settings;}
+    else if(pth==="font"){u.font=db.font;}
+  });
+  return u;
+}
+
 function pushCloud(){
   if(!useFirebase||!fdb)return;
-  if(!cloudSynced){pendingPush=true;flag("클라우드 확인 중…");return;}
-  if(!cloudOnline){pendingPush=true;flag("오프라인 · 기기에 저장됨");return;}
-  
-  pendingPush=false;
-  db._by=CLIENT_ID; db._ts=Date.now();
-  flag("동기화 중…");
-  
+  if(!dirty.size)return;
+  if(!cloudSynced){flag("클라우드 확인 중… (미전송 "+dirty.size+"건)");return;}
+  if(!cloudOnline){flag("오프라인 · 미전송 "+dirty.size+"건");return;}
+
+  const paths=[...dirty];
+  const payload=buildUpdate(paths);
+  payload._by=CLIENT_ID; payload._ts=now();
+  flag("동기화 중… ("+paths.length+"건)");
+
   const attempt=()=>{
-    fdb.ref(CLOUD_PATH).set(JSON.parse(JSON.stringify(db)))
+    fdb.ref(CLOUD_PATH).update(JSON.parse(JSON.stringify(payload)))
       .then(()=>{
+        /* ★ 서버가 받았다고 확인한 뒤에만 미전송 표시를 지웁니다 */
+        paths.forEach(x=>dirty.delete(x));
+        saveDirty();
+        lastSent={backlog:JSON.stringify(db.backlog||[]),
+                  rituals:JSON.stringify(db.rituals||[]),
+                  settings:JSON.stringify(db.settings||{}),
+                  font:String(db.font||"")};
         pushRetry.count=0;
         cloudSaveSuccess=true;
-        flag("☁ 동기화됨 "+new Date().toTimeString().slice(0,5));
         clearTimeout(pushRetry.timer);
+        syncFlag();
+        if(dirty.size)setTimeout(pushCloud,400);   // 그 사이 또 바뀐 게 있으면 이어서
       })
       .catch(err=>{
         console.error("[sync] 쓰기 실패(시도 "+(pushRetry.count+1)+"/"+pushRetry.maxRetries+")",err);
         if(pushRetry.count<pushRetry.maxRetries){
           pushRetry.count++;
           const wait=Math.pow(2,pushRetry.count)*1000;
-          flag("⚠ 재시도 중 ("+pushRetry.count+"/"+pushRetry.maxRetries+")");
+          flag("⚠ 재시도 중 ("+pushRetry.count+"/"+pushRetry.maxRetries+") · 미전송 "+dirty.size+"건");
           pushRetry.timer=setTimeout(attempt,wait);
         }else{
+          /* 실패해도 dirty는 그대로 남습니다. 다음에 앱을 열면 다시 보냅니다. */
           cloudSaveSuccess=false;
-          pendingPush=true;
-          flag(err&&err.code==="PERMISSION_DENIED"?"⚠ 규칙 거부(쓰기)":"⚠ 동기화 실패");
+          flag(err&&err.code==="PERMISSION_DENIED"?"⚠ 규칙 거부(쓰기) · 미전송 "+dirty.size+"건":"⚠ 동기화 실패 · 미전송 "+dirty.size+"건");
         }
       });
   };
@@ -1879,7 +2021,7 @@ $("fileIn").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new File
     applyFont(db.font);
     saveLocal();
     render();
-    if(useFirebase){cloudSynced=true;pushCloud();}   // 복원본을 클라우드에 확정
+    if(useFirebase){cloudSynced=true;markAllDirty();pushCloud();}   // 복원본을 클라우드에 확정
     toast(cnt+"일치를 불러왔습니다");
   }catch(err){console.error(err);toast("백업 파일 형식이 아닙니다");}};
   r.readAsText(f);e.target.value="";};
@@ -1996,8 +2138,11 @@ function applyRemote(remote){
   applyingRemote=true;
   try{
     if(!cloudSynced)dropEmptyShells();   // 첫 수신: 빈 껍데기 제거 후 병합
-    db=mergeDB(db,remote);
+    db=mergeDB(db,remote,dirty);         // 미전송분은 원격에 덮이지 않는다
     applyFont(db.font);
+    /* 원격을 받아들인 뒤 기준선 갱신. 미전송 항목은 건드리지 않는다. */
+    const sh=snapshotShared();
+    Object.keys(sh).forEach(k=>{if(!dirty.has(k))lastSent[k]=sh[k];});
     saveLocal();
     render();
     /* 이 기기에만 있던(또는 더 최신인) 기록은 다시 클라우드로 올려 양쪽을 맞춤 */
@@ -2144,15 +2289,25 @@ function startCloudSync(){
   cloudListenerActive=true;
   flag("클라우드 연결 중…");
 
+  /* 서버와의 시차를 먼저 잡습니다. 기기 시계가 틀어져 있어도
+     모든 기록이 같은 기준으로 비교되게 하기 위함입니다. */
+  fdb.ref(".info/serverTimeOffset").on("value",snap=>{
+    const v=Number(snap.val());
+    if(isFinite(v)){
+      serverSkew=v;
+      if(Math.abs(v)>60000)console.warn("[sync] 이 기기 시계가 서버와 "+Math.round(v/1000)+"초 차이납니다");
+    }
+  });
+
   // 실제 연결 상태 추적
   fdb.ref(".info/connected").on("value",snap=>{
     cloudOnline=!!snap.val();
     if(currentUser){
       if(cloudOnline){
-        if(pendingPush)pushCloud();
+        if(dirty.size)pushCloud();        // ★ 못 보낸 게 있으면 연결되는 즉시 재전송
         else flag("☁ 연결됨");
       }else{
-        flag("오프라인 · 기기에 저장됨");
+        flag(dirty.size?"오프라인 · 미전송 "+dirty.size+"건":"오프라인 · 기기에 저장됨");
       }
     }
   });
@@ -2161,12 +2316,12 @@ function startCloudSync(){
     const remote=snapshot.val();
 
     // (a) 내가 방금 올린 변경이 되돌아온 것 → 무시 (에코 루프·포커스 튕김 방지)
-    if(remote&&remote._by===CLIENT_ID){cloudSynced=true;return;}
+    if(remote&&remote._by===CLIENT_ID){cloudSynced=true;if(dirty.size)pushCloud();return;}
 
     // (b) 클라우드가 비어 있음 → 내 기록을 올려서 초기화
     if(!remote||!remote.days||Object.keys(remote.days).length===0){
       cloudSynced=true;
-      if(db.days&&Object.keys(db.days).length>0)pushCloud();
+      if(db.days&&Object.keys(db.days).length>0){markAllDirty();pushCloud();}
       else flag("☁ 연결됨 (기록 없음)");
       return;
     }
@@ -2176,8 +2331,8 @@ function startCloudSync(){
     if(isTyping()){pendingRemote=remote;flag("☁ 새 변경 대기 중");return;}
     applyRemote(remote);
     cloudSynced=true;
-    if(pendingPush)pushCloud();
-    flag("☁ 동기화됨 "+new Date().toTimeString().slice(0,5));
+    if(dirty.size)pushCloud();
+    syncFlag();
   },err=>{
     // ★ 원래 코드에는 이 에러 콜백이 없어서, 규칙에 막혀도
     //   "클라우드 연결 중…"에서 영원히 멈춘 채 아무 안내가 없었습니다.
