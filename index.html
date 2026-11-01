@@ -889,7 +889,7 @@ function mergeDB(local,remote,protect){
   return out;
 }
 
-const APP_VER="v10";
+const APP_VER="v11";
 
 /* ══════════════════════════════════════════════════════════════════
    자동 백업 시스템
@@ -898,8 +898,10 @@ const APP_VER="v10";
 const BK_PREFIX  = "planner_backup_";   // 일자별 스냅샷
 const BK_SNAP    = "planner_snap_";     // 변경 직전 자동 스냅샷
 const BK_LAST    = "planner_backup_last";
-const BK_KEEP    = 10;   // 일자별 보관 개수
-const BK_SNAPKEEP= 8;    // 직전 스냅샷 보관 개수
+const BK_KEEP    = 6;    // 일자별 보관 개수 (10 → 6)
+const BK_SNAPKEEP= 4;    // 직전 스냅샷 보관 개수 (8 → 4)
+/* 사본 18개면 저장소에 2MB가 쌓입니다. localStorage 쓰기는 동기라서
+   쌓일수록 매 저장이 느려집니다. 10개로 줄여도 복원 여력은 충분합니다. */
 
 /* 내용이 있는 데이터인지 (빈 상태를 백업으로 남기지 않기 위함) */
 function dbHasContent(x){
@@ -964,10 +966,12 @@ function dailyBackupIfNeeded(){
       ★ 사고가 난 뒤의 db를 저장하면 의미가 없으므로, 직전 사본을 들고 있다가 그것을 씁니다. */
 let lastSize={d:0,w:0};
 let lastGood=null;          // 마지막으로 정상이었던 시점의 사본
-function rememberGood(){
+function rememberGood(json){
   try{
     if(!dbHasContent(db))return;
-    lastGood=JSON.stringify(db);
+    /* 이미 만들어둔 문자열이 있으면 재사용. 저장 한 번에 145KB짜리
+       JSON.stringify 를 두 번 돌리던 것을 한 번으로 줄입니다. */
+    lastGood=json||JSON.stringify(db);
     lastSize=dbSize(db);
   }catch(e){}
 }
@@ -985,17 +989,17 @@ function writeRaw(key,json,label){
     return false;
   }
 }
-function snapshotIfShrinking(){
+function snapshotIfShrinking(json){
   try{
     const now=dbSize(db);
-    if(!lastGood){rememberGood();return;}
+    if(!lastGood){rememberGood(json);return;}
     const shrank=(now.d<lastSize.d)||(now.w<lastSize.w);
     if(shrank){
       console.warn("[backup] 기록이 줄었습니다 - 줄기 전 상태를 보관합니다");
       writeRaw(BK_SNAP+new Date().toISOString().replace(/[:.]/g,"-"),lastGood,"직전 스냅샷");
       pruneBackups(BK_SNAP,BK_SNAPKEEP);
     }
-    rememberGood();
+    rememberGood(json);
   }catch(e){}
 }
 
@@ -1139,9 +1143,9 @@ function stamp(){
   }
 }
 
-function saveLocal(){
+function saveLocal(json){
   try{
-    store.setItem(KEY,JSON.stringify(db));
+    store.setItem(KEY,json||JSON.stringify(db));
     localSaved=true;
     return true;
   }catch(e){
@@ -1152,6 +1156,11 @@ function saveLocal(){
 }
 
 let pushRetry={timer:null,count:0,maxRetries:5};
+/* ★ 전송 중인 자리. Firebase는 쓰기 응답(ack)보다 변경 알림(echo)이
+   먼저 오는 일이 흔한데, 그 시점엔 미전송 목록이 아직 비워지기 전이라
+   "아직 보낼 게 있네" 하고 또 보내게 됩니다. 그러면 전송이 연쇄적으로
+   늘어나 입력이 버벅입니다. 한 번에 하나만 날아가게 막습니다. */
+let inflight=new Set();
 
 /* 미전송 건수를 화면에 드러냅니다. 예전에는 못 보낸 게 있어도
    "동기화됨"처럼 보여서, 기록이 올라간 줄 알고 자리를 뜨게 됐습니다. */
@@ -1181,7 +1190,9 @@ function pushCloud(){
   if(!cloudSynced){flag("클라우드 확인 중… (미전송 "+dirty.size+"건)");return;}
   if(!cloudOnline){flag("오프라인 · 미전송 "+dirty.size+"건");return;}
 
+  if(inflight.size)return;          // 이미 날아간 전송의 응답을 기다리는 중
   const paths=[...dirty];
+  paths.forEach(x=>inflight.add(x));
   const payload=buildUpdate(paths);
   payload._by=CLIENT_ID; payload._ts=now();
   flag("동기화 중… ("+paths.length+"건)");
@@ -1190,7 +1201,7 @@ function pushCloud(){
     fdb.ref(CLOUD_PATH).update(JSON.parse(JSON.stringify(payload)))
       .then(()=>{
         /* ★ 서버가 받았다고 확인한 뒤에만 미전송 표시를 지웁니다 */
-        paths.forEach(x=>dirty.delete(x));
+        paths.forEach(x=>{dirty.delete(x);inflight.delete(x);});
         saveDirty();
         lastSent={backlog:JSON.stringify(db.backlog||[]),
                   rituals:JSON.stringify(db.rituals||[]),
@@ -1208,9 +1219,11 @@ function pushCloud(){
           pushRetry.count++;
           const wait=Math.pow(2,pushRetry.count)*1000;
           flag("⚠ 재시도 중 ("+pushRetry.count+"/"+pushRetry.maxRetries+") · 미전송 "+dirty.size+"건");
+          inflight.clear();
           pushRetry.timer=setTimeout(attempt,wait);
         }else{
           /* 실패해도 dirty는 그대로 남습니다. 다음에 앱을 열면 다시 보냅니다. */
+          inflight.clear();
           cloudSaveSuccess=false;
           flag(err&&err.code==="PERMISSION_DENIED"?"⚠ 규칙 거부(쓰기) · 미전송 "+dirty.size+"건":"⚠ 동기화 실패 · 미전송 "+dirty.size+"건");
         }
@@ -1224,16 +1237,19 @@ function save(now){
      (기존 코드는 isRemoteUpdating 300ms 동안 입력을 통째로 버렸습니다) */
   if(applyingRemote)return;
   clearTimeout(saveTimer);
-  const go=()=>{
-    stamp();
-    snapshotIfShrinking();
-    const okLocal=saveLocal();
-    if(!useFirebase){flag(okLocal?"이 기기에 저장됨":"⚠ 저장 실패");return;}
-    if(!okLocal)flag("⚠ 로컬 저장 실패");
-    pushCloud();
-  };
-  if(now)go();
-  else{flag("입력 중…");saveTimer=setTimeout(go,800);}
+  if(now){saveTimer=null;runSave();}
+  else{flag("입력 중…");saveTimer=setTimeout(runSave,800);}
+}
+
+function runSave(){
+  saveTimer=null;
+  stamp();
+  const json=JSON.stringify(db);     // ★ 한 번만 만들어 두 곳에서 쓴다
+  snapshotIfShrinking(json);
+  const okLocal=saveLocal(json);
+  if(!useFirebase){flag(okLocal?"이 기기에 저장됨":"⚠ 저장 실패");return;}
+  if(!okLocal)flag("⚠ 로컬 저장 실패");
+  pushCloud();
 }
 
 function flag(t,icon=""){
@@ -2092,7 +2108,13 @@ $("prev").onclick=()=>go(addD(cur,-1));
 $("next").onclick=()=>go(addD(cur,1));
 $("todayBtn").onclick=()=>go(key(new Date()));
 $("datePick").onchange=e=>{if(e.target.value)go(e.target.value);};
-function go(d){save(true);cur=d;render();window.scrollTo({top:0});}
+function go(d){
+  /* 예전에는 날짜만 넘겨도 매번 전체 저장(145KB 직렬화 + 클라우드 전송)을
+     돌렸습니다. 고친 게 없으면 할 일이 없으므로, 입력 대기 중인 저장이
+     있을 때만 밀어냅니다. 화살표 연타가 눈에 띄게 가벼워집니다. */
+  if(saveTimer){clearTimeout(saveTimer);runSave();}
+  cur=d;render();window.scrollTo({top:0});
+}
 document.addEventListener("keydown",e=>{
   if(e.altKey&&e.key==="ArrowLeft"){e.preventDefault();go(addD(cur,-1));}
   if(e.altKey&&e.key==="ArrowRight"){e.preventDefault();go(addD(cur,1));}
@@ -2316,7 +2338,9 @@ function startCloudSync(){
     const remote=snapshot.val();
 
     // (a) 내가 방금 올린 변경이 되돌아온 것 → 무시 (에코 루프·포커스 튕김 방지)
-    if(remote&&remote._by===CLIENT_ID){cloudSynced=true;if(dirty.size)pushCloud();return;}
+    /* 내가 올린 변경이 되돌아온 것. 여기서 또 보내면 전송이 연쇄적으로
+       늘어납니다. 남은 건 ack 처리 쪽에서 이어서 보냅니다. */
+    if(remote&&remote._by===CLIENT_ID){cloudSynced=true;return;}
 
     // (b) 클라우드가 비어 있음 → 내 기록을 올려서 초기화
     if(!remote||!remote.days||Object.keys(remote.days).length===0){
