@@ -889,7 +889,7 @@ function mergeDB(local,remote,protect){
   return out;
 }
 
-const APP_VER="v11";
+const APP_VER="v12";
 
 /* ══════════════════════════════════════════════════════════════════
    자동 백업 시스템
@@ -2321,6 +2321,12 @@ function startCloudSync(){
     }
   });
 
+  /* 안전망: 어떤 경로로도 전송이 걸리지 못한 미전송분이 남아 있으면
+     주기적으로 다시 시도합니다. 기록이 조용히 묻히는 일이 없도록. */
+  setInterval(()=>{
+    if(dirty.size&&cloudSynced&&cloudOnline&&!inflight.size)pushCloud();
+  },30000);
+
   // 실제 연결 상태 추적
   fdb.ref(".info/connected").on("value",snap=>{
     cloudOnline=!!snap.val();
@@ -2338,9 +2344,16 @@ function startCloudSync(){
     const remote=snapshot.val();
 
     // (a) 내가 방금 올린 변경이 되돌아온 것 → 무시 (에코 루프·포커스 튕김 방지)
-    /* 내가 올린 변경이 되돌아온 것. 여기서 또 보내면 전송이 연쇄적으로
-       늘어납니다. 남은 건 ack 처리 쪽에서 이어서 보냅니다. */
-    if(remote&&remote._by===CLIENT_ID){cloudSynced=true;return;}
+    /* 내가 올린 변경이 되돌아온 것(에코).
+       ★ 전송 중일 때 여기서 또 보내면 연쇄적으로 늘어나므로 inflight 가드가
+         막아줍니다. 반대로 앱을 켤 때 마지막 기록자가 나 자신이면 첫 수신이
+         곧장 이 분기로 떨어지는데, 여기서 아무것도 안 하면 못 보낸 기록이
+         영영 올라가지 않습니다. 그래서 가드를 믿고 전송을 시도합니다. */
+    if(remote&&remote._by===CLIENT_ID){
+      cloudSynced=true;
+      if(dirty.size)pushCloud(); else syncFlag();
+      return;
+    }
 
     // (b) 클라우드가 비어 있음 → 내 기록을 올려서 초기화
     if(!remote||!remote.days||Object.keys(remote.days).length===0){
