@@ -889,7 +889,7 @@ function mergeDB(local,remote,protect){
   return out;
 }
 
-const APP_VER="v13";
+const APP_VER="v14";
 
 /* ══════════════════════════════════════════════════════════════════
    자동 백업 시스템
@@ -2440,12 +2440,17 @@ if(!useFirebase){
   if("serviceWorker" in navigator){
     window.addEventListener("load", function(){
       navigator.serviceWorker.register("./sw.js").then(function(reg){
+        /* 대기 중인 새 워커가 있으면 즉시 교대시킨다.
+           옛 워커가 계속 돌면 푸시 수신 코드가 없어 알림이 안 뜬다. */
+        if(reg.waiting) reg.waiting.postMessage("SKIP_WAITING");
+        reg.update();
         reg.addEventListener("updatefound", function(){
           var nw = reg.installing;
           if(!nw) return;
           nw.addEventListener("statechange", function(){
             if(nw.state === "installed" && navigator.serviceWorker.controller){
-              say("새 버전이 준비됐습니다. 새로고침하면 적용됩니다");
+              nw.postMessage("SKIP_WAITING");
+              say("새 버전이 적용됐습니다");
             }
           });
         });

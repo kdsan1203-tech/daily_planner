@@ -2,7 +2,7 @@
    목적: 홈화면 설치(PWA) + 오프라인에서도 앱이 열리게 하기
    원칙: Firebase 실시간 통신과 로그인 요청은 절대 가로채지 않는다. */
 
-const CACHE = 'planner-shell-v1';
+const CACHE = 'planner-shell-v2';
 
 /* 앱 껍데기 - 설치 시 미리 받아둔다 */
 const CORE = [
@@ -21,6 +21,11 @@ const BYPASS = [
 ];
 
 self.addEventListener('install', e => {
+  /* ★ 새 워커가 '대기' 상태에 머무르지 않고 곧바로 교대하게 한다.
+     이게 없으면 index.html은 새 버전인데 서비스워커만 옛것인 상태가
+     오래 간다. 푸시 수신 코드가 옛 워커에 없으면 알림이 조용히
+     사라지는데, 화면상으로는 아무 이상이 없어 원인을 찾기 어렵다. */
+  self.skipWaiting();
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
     await Promise.all(CORE.map(u => c.add(new Request(u, { cache: 'reload' })).catch(() => {})));
