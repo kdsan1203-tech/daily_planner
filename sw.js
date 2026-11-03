@@ -85,3 +85,49 @@ self.addEventListener('fetch', e => {
     return cached || (await net) || new Response('', { status: 504 });
   })());
 });
+
+/* ══════════════════════════════════════════════════════════════════
+   푸시 알림 수신
+   발송기(Cloudflare Worker)가 보낸 암호화 메시지를 받아 안드로이드
+   상단바 알림으로 띄운다. 본문 첫 줄이 제목, 나머지가 내용이 된다.
+====================================================================== */
+self.addEventListener('push', e => {
+  let text = '';
+  try { text = e.data ? e.data.text() : ''; } catch (_) {}
+  if (!text) text = '일일계획표 알림';
+
+  const lines = text.split('\n');
+  const title = lines[0] || '일일계획표';
+  const body  = lines.slice(1).join('\n').trim();
+
+  e.waitUntil(self.registration.showNotification(title, {
+    body,
+    icon: './icon-192.png',
+    badge: './favicon-32.png',
+    tag: 'planner',           // 같은 tag는 덮어써서 알림이 쌓이지 않는다
+    renotify: true,
+    requireInteraction: false,
+    data: { url: './index.html' }
+  }));
+});
+
+/* 알림을 누르면 이미 열린 계획표로 가고, 없으면 새로 연다 */
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const target = new URL('./index.html', self.location.href).href;
+  e.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of all) {
+      if (c.url.startsWith(self.registration.scope) && 'focus' in c) return c.focus();
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(target);
+  })());
+});
+
+/* 구독이 만료·교체되면 앱이 다음 실행 때 다시 등록하도록 표시만 남긴다 */
+self.addEventListener('pushsubscriptionchange', e => {
+  e.waitUntil(self.registration.showNotification('일일계획표', {
+    body: '알림 등록을 갱신해야 합니다. 앱을 한 번 열어주세요.',
+    icon: './icon-192.png', tag: 'planner-resub'
+  }));
+});
